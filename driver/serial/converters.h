@@ -17,5 +17,12 @@ std::vector<TargetType> convert32bitTo4(SourceType number) {
     return converted;
 }
 
+template<typename SourceType, typename TargetType>
+TargetType convert4x8BitsTo32(const std::vector<SourceType>& array, const int arrayOffset = 0) {
+    return array[0 + arrayOffset] << 24
+           | array[1 + arrayOffset] << 16
+           | array[2 + arrayOffset] << 8
+           | array[3 + arrayOffset];
+}
 
 #endif //CONVERTERS_H

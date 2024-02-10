@@ -65,10 +65,7 @@ std::unique_ptr<HandshakePacket> HandshakePacket::unpack(const std::vector<char>
     const auto &packetStage = static_cast<HandshakeStage>(stage);
 
     if (payloadSize > 1) {
-        uint32_t ackNumber = payload[1] << 24
-                             | payload[2] << 16
-                             | payload[3] << 8
-                             | payload[4];
+        uint32_t ackNumber = convert4x8BitsTo32<char, uint32_t>(payload, 1);
 
         return std::make_unique<HandshakePacket>(packetStage, ackNumber);
     }

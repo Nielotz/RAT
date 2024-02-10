@@ -77,8 +77,10 @@ std::unique_ptr<Packet> Serial::readPacket() const {
     else
         packetType = static_cast<PacketType>(packetTypeBuff);
 
-    uint32_t payloadSize;
-    readBytes = ::read(fd, &payloadSize, 4);
+    std::vector<char> buff(4);
+    readBytes = ::read(fd, buff.data(), 4);
+    const uint32_t payloadSize = convert4x8BitsTo32<char, uint32_t>(buff);
+
     if (readBytes != 4) {
         std::cerr << "Error reading packet length: " << strerror(errno) << std::endl;
         throw;
