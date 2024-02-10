@@ -35,9 +35,9 @@ public:
 
     void open();
 
-    bool writePacket(const Packet *packet) const;
+    bool writePacket(const std::unique_ptr<Packet> &packet) const;
 
-    Packet *readPacket() const;
+    std::unique_ptr<Packet> readPacket() const;
 
 private:
     termios tty = {};

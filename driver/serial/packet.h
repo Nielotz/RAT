@@ -1,7 +1,9 @@
 #ifndef PACKET_H
 #define PACKET_H
 #include <cstdint>
+#include <memory>
 #include <string>
+#include <vector>
 
 /*
  * Implemented packet types.
@@ -15,29 +17,24 @@ enum class PacketType : uint8_t {
 };
 
 /* Packet format:
- * [ uint8_t  ][uint32_t[[    ]
- * [PacketType][DataSize][data]
+ * [ uint8_t  ][  uint32_t [[       ]
+ * [PacketType][PayloadSize][payload]
  */
 struct Packet {
     const PacketType packetType = PacketType::UNDEFINED;
-    const uint32_t payloadSize = 0; // In bytes.
-    const char *payload = nullptr;
+    std::vector<char> payload;
 
     Packet() = default;
 
-    Packet(const Packet &packet);
+    Packet(PacketType packetType, const std::vector<char> &payload);
 
-    Packet(uint32_t payloadSize, PacketType packetType, const char *payload);
-
-    ~Packet();
+    Packet(PacketType packetType, const std::string &payload);
 };
 
 struct UndefinedPacket : Packet {
     const PacketType packetType = PacketType::UNDEFINED;
 
-    UndefinedPacket();
-
-    UndefinedPacket(uint32_t payloadSize, const char *payload);
+    explicit UndefinedPacket(const std::vector<char> &payload);
 };
 
 struct DebugPacket : Packet {
@@ -49,27 +46,40 @@ struct DebugPacket : Packet {
 
     explicit DebugPacket(std::string message);
 
-    DebugPacket(uint32_t payloadSize, const char *payload);
+    static std::unique_ptr<DebugPacket> unpack(const std::vector<char> &payload);
 
-    static DebugPacket *unpack(uint32_t payloadSize, const char *payload);
+    static std::unique_ptr<DebugPacket> unpack(const Packet &packet);
 
-    static DebugPacket *unpack(const Packet *packet);
+    static std::unique_ptr<DebugPacket> unpack(const std::unique_ptr<Packet> &packet);
 
-    Packet *pack() const;
+    std::unique_ptr<Packet> pack() const;
 };
 
-
+/*
+ * payload (only SYN and SYN_ACK sends ACK number):
+ * [   uint8_t    ]{ uint32_t }
+ * [HandshakeStage]{ACK number}
+ */
 struct HandshakePacket : Packet {
     const PacketType packetType = PacketType::HANDSHAKE;
-    std::string tempMessage = "HANDSHAKE";
 
-    HandshakePacket(uint32_t payloadSize, const char *payload);
+    enum class HandshakeStage : uint8_t {
+        INVALID,
+        SYN,
+        ACK,
+        SYN_ACK,
+    };
 
-    static HandshakePacket *unpack(const Packet *packet);
+    HandshakeStage stage = HandshakeStage::INVALID;
+    uint32_t ackNumber = -1;
 
-    static HandshakePacket *unpack(uint32_t payloadSize, const char *payload);
+    explicit HandshakePacket(HandshakeStage stage, uint32_t ackNumber = -1);
 
-    Packet *pack() const;
+    static std::unique_ptr<HandshakePacket> unpack(const std::unique_ptr<Packet> &packet);
+
+    static std::unique_ptr<HandshakePacket> unpack(const std::vector<char>& payload);
+
+    std::unique_ptr<Packet> pack() const;
 };
 
 
