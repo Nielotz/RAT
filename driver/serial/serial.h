@@ -33,7 +33,7 @@ class Serial {
 public:
     Serial(std::string path, BaudRate baudRate);
 
-    void open();
+    bool open();
 
     bool writePacket(const std::unique_ptr<Packet> &packet) const;
 

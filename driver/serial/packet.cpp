@@ -13,12 +13,37 @@ Packet::Packet(const PacketType packetType, const std::string &payload)
     : packetType(packetType), payload(payload.c_str(), payload.c_str() + payload.size() + 1) {
 }
 
+std::string Packet::str() const {
+    std::stringstream repr;
+    std::string packetTypeName;
+    switch (packetType) {
+        case PacketType::DEBUG:
+            packetTypeName = "DEBUG";
+            break;
+        case PacketType::HANDSHAKE:
+            packetTypeName = "HANDSHAKE";
+            break;
+        case PacketType::UNDEFINED:
+            packetTypeName = "UNDEFINED";
+            break;
+        default: ;
+    }
+
+    repr << "Packet: PacketType: " << packetTypeName << ", payload(" << payload.size() << "): ";
+    repr << "0x" << std::hex;
+    for (const char &elem: payload)
+        repr << static_cast<uint32_t>(elem);
+    repr << std::dec;
+
+    return repr.str();
+}
+
 
 UndefinedPacket::UndefinedPacket(const std::vector<char> &payload)
     : Packet(PacketType::UNDEFINED, payload) {
 }
 
-
+#ifdef __cpp_fold_expressions
 template<typename... T>
 DebugPacket::DebugPacket(T... args) {
     std::ostringstream mess;
@@ -27,13 +52,22 @@ DebugPacket::DebugPacket(T... args) {
 
     this->message = mess.str();
 }
+#endif
 
 DebugPacket::DebugPacket(std::string message)
     : message(std::move(message)) {
 }
 
+DebugPacket::DebugPacket(const char *message)
+    : message(message) {
+}
+
 std::unique_ptr<DebugPacket> DebugPacket::unpack(const std::vector<char> &payload) {
-    return std::make_unique<DebugPacket>(std::string(payload.begin(), payload.end()));
+    auto message = std::string(payload.begin(), payload.end());
+    // if (message.ends_with('\0'))  // Requires C++20
+    if (message[message.size() - 1] == '\0')
+        message.pop_back();
+    return std::make_unique<DebugPacket>(message);
 }
 
 std::unique_ptr<DebugPacket> DebugPacket::unpack(const Packet &packet) {
@@ -77,20 +111,42 @@ std::unique_ptr<HandshakePacket> HandshakePacket::unpack(const std::unique_ptr<P
 }
 
 std::unique_ptr<Packet> HandshakePacket::pack() const {
-    std::vector<char> payload(5);
+    std::vector<char> payload;
+    payload.reserve(5);
+    payload.emplace_back(static_cast<char>(this->stage));
 
     switch (stage) {
         case HandshakeStage::SYN:
-            payload[0] = static_cast<char>(this->stage);
             break;
         case HandshakeStage::ACK:
         case HandshakeStage::SYN_ACK:
-            payload[0] = static_cast<char>(this->stage);
+            payload.resize(5);
             convert32bitTo4<uint32_t, char>(ackNumber, &payload[1]);
-            break;
         case HandshakeStage::INVALID:
         default:
             return nullptr;
     }
     return std::make_unique<Packet>(PacketType::HANDSHAKE, payload);
+}
+
+std::string HandshakePacket::str() const {
+    std::stringstream repr;
+    std::string handshakeStage;
+    switch (stage) {
+        case HandshakeStage::INVALID:
+            handshakeStage = "INVALID";
+            break;
+        case HandshakeStage::SYN:
+            handshakeStage = "SYN";
+            break;
+        case HandshakeStage::ACK:
+            handshakeStage = "ACK";
+            break;
+        case HandshakeStage::SYN_ACK:
+            handshakeStage = "SYN_ACK";
+            break;
+        default: ;
+    }
+    repr << "HandshakeStage: " << handshakeStage << ", ackNumber: " << ackNumber;
+    return repr.str();
 }

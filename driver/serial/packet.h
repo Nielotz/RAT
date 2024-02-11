@@ -29,6 +29,8 @@ struct Packet {
     Packet(PacketType packetType, const std::vector<char> &payload);
 
     Packet(PacketType packetType, const std::string &payload);
+
+    std::string str() const;
 };
 
 struct UndefinedPacket : Packet {
@@ -41,10 +43,13 @@ struct DebugPacket : Packet {
     const PacketType packetType = PacketType::DEBUG;
     std::string message = {};
 
+// #ifdef __cpp_fold_expressions
     template<typename... T>
     explicit DebugPacket(T... args);
+// #endif
 
     explicit DebugPacket(std::string message);
+    explicit DebugPacket(const char* message);
 
     static std::unique_ptr<DebugPacket> unpack(const std::vector<char> &payload);
 
@@ -80,6 +85,8 @@ struct HandshakePacket : Packet {
     static std::unique_ptr<HandshakePacket> unpack(const std::vector<char>& payload);
 
     std::unique_ptr<Packet> pack() const;
+
+    std::string str() const;
 };
 
 

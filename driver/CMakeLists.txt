@@ -17,3 +17,4 @@ add_executable(pam_fp_test
 )
 
 target_link_libraries(pam_fp_test PUBLIC my_serial pam pam_misc)
+
