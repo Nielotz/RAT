@@ -121,7 +121,8 @@ std::unique_ptr<Packet> HandshakePacket::pack() const {
         case HandshakeStage::ACK:
         case HandshakeStage::SYN_ACK:
             payload.resize(5);
-            convert32bitTo4<uint32_t, char>(ackNumber, &payload[1]);
+            convert32bitTo4<uint32_t, char>(ackNumber, payload, 1);
+            break;
         case HandshakeStage::INVALID:
         default:
             return nullptr;
