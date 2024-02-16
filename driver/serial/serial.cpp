@@ -54,7 +54,7 @@ bool Serial::open() {
 bool Serial::writePacket(const std::unique_ptr<Packet> &packet) const {
     const auto packetType = static_cast<uint8_t>(packet->packetType);
     const auto payloadSize = static_cast<uint32_t>(packet->payload.size());
-    const auto payloadSizeAsChars = convert32bitTo4<uint32_t, char>(payloadSize);
+    const auto payloadSizePacked = convert32bitTo4<uint32_t, char>(payloadSize);
 
     std::cout << "Sending packet: '" << packet->str() << "', raw: 0x"
     << std::hex
@@ -63,13 +63,14 @@ bool Serial::writePacket(const std::unique_ptr<Packet> &packet) const {
 
     if (::write(fd, &packetType, 1) != sizeof(uint8_t))
         return false;
-    if (::write(fd, payloadSizeAsChars.data(), sizeof(uint32_t)) != sizeof(uint32_t))
+    if (::write(fd, payloadSizePacked.data(), sizeof(uint32_t)) != sizeof(uint32_t))
         return false;
     if (::write(fd, packet->payload.data(), payloadSize) != payloadSize)
         return false;
 
     return true;
 }
+
 
 std::unique_ptr<Packet> Serial::readPacket() const {
     uint8_t packetTypeBuff;
