@@ -51,12 +51,6 @@ std::unique_ptr<Packet> UsbConnection::receivePacket() const {
     return std::make_unique<Packet>(packetType, buffer);
 }
 
-// ReSharper disable once CppMemberFunctionMayBeConst
-void UsbConnection::setCallback() {
-    if (!callbackSet)
-        usb.onEvent(usbEventCallback);
-}
-
 // TODO: Handle failed to send.
 // ReSharper disable once CppParameterMayBeConst
 void UsbConnection::usbEventCallback(void *arg, esp_event_base_t eventBase, int32_t eventId, void *eventData) {
@@ -130,3 +124,58 @@ void UsbConnection::usbEventCallback(void *arg, esp_event_base_t eventBase, int3
         }
     }
 }
+
+bool UsbConnection::handleHanshakePacket(const std::unique_ptr<HandshakePacket> &handshakePacket) {
+    switch (handshakePacket->stage) {
+        case HandshakePacket::HandshakeStage::SYN:
+            this->syn = 0;
+            return this->sendPacket(HandshakePacket(HandshakePacket::HandshakeStage::SYN_ACK, this->syn++).pack());
+        case HandshakePacket::HandshakeStage::SYN_ACK:
+            return this->sendPacket(DebugPacket("uC side SYN_ACK not supported").pack());
+        case HandshakePacket::HandshakeStage::ACK:
+            return this->sendPacket(DebugPacket("Handshake ACK OK").pack());
+        case HandshakePacket::HandshakeStage::INVALID:
+        default:
+            return this->sendPacket(DebugPacket("Received invalid handshake").pack());
+    }
+}
+
+/* Handle usb.
+ *
+ * Recives up to *packetsAmountLimit* packets, and handles them.
+ */
+void UsbConnection::handleUsb(int packetsAmountLimit) {
+    if (!usb)
+        return;
+    if (!callbackSet) {
+        usb.onEvent(usbEventCallback);
+        callbackSet = true;
+    }
+
+    while (--packetsAmountLimit) {
+        const std::unique_ptr<Packet> packet = receivePacket();
+        if (packet == nullptr)
+            return;
+
+        sendPacket(DebugPacket("Received packet: " + packet->str()).pack());
+        switch (packet->packetType) {
+            case PacketType::HANDSHAKE: {
+                sendPacket(DebugPacket("Packet is a handshake.").pack());
+                const auto &handshakePacket = HandshakePacket::unpack(packet);
+                this->sendPacket(DebugPacket(handshakePacket->str()).pack());
+                    // ReSharper disable once CppExpressionWithoutSideEffects
+
+                const bool success = handleHanshakePacket(handshakePacket);
+                sendPacket(
+                    DebugPacket(std::string("Handled handshake: ") + (success ? "success" : "failed")).pack());
+            }
+
+            break;
+            case PacketType::DEBUG:
+            case PacketType::UNDEFINED:
+            default: ;
+        }
+    }
+    return ;
+}
+

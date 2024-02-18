@@ -15,12 +15,16 @@ public:
     /* Receive packet or nullptr when no packet available. */
     std::unique_ptr<Packet> receivePacket() const;
 
-    /*
-     * Prepare connection.
-     */
-    void setCallback();
-
     static void usbEventCallback(void *arg, esp_event_base_t eventBase, int32_t eventId, void *eventData);
+
+    /**
+     * \brief Handle handshake procedure.
+     * \param packet
+     * \return success
+     */
+    bool handleHanshakePacket(const std::unique_ptr<HandshakePacket> &packet);
+
+    void handleUsb(int packetsAmountLimit = 5);
 
     static UsbConnection* debugUsbConnection;
 private:

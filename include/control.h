@@ -3,42 +3,94 @@
 #include <esp32-hal-gpio.h>
 
 namespace control {
-    namespace button::main {
-        constexpr auto pin = GPIO_NUM_0;
-        constexpr auto mode = INPUT_PULLUP;
+    namespace main {
+        namespace button {
+            constexpr auto pin = GPIO_NUM_0;
+            constexpr auto mode = INPUT_PULLUP;
 
-        inline bool isPressed() {
-            return !digitalRead(pin);
+            inline bool isPressed() {
+                return !digitalRead(pin);
+            }
+
+            inline void init() {
+                pinMode(pin, mode);
+            }
         }
 
-        inline void init() {
-            pinMode(pin, mode);
+        namespace led {
+            constexpr auto pin = LED_BUILTIN;
+
+            inline void init() {
+                pinMode(pin, INPUT | OUTPUT);
+            }
+
+            inline void on() {
+                digitalWrite(pin, HIGH);
+            }
+
+            inline void off() {
+                digitalWrite(pin, LOW);
+            }
+
+            inline void flipState() {
+                digitalWrite(pin, !digitalRead(pin));
+            }
         }
+
     }
 
+    namespace mouse {
+        namespace move_left_button {
+            constexpr auto pin = GPIO_NUM_8;
+            constexpr auto mode = INPUT;
 
-    namespace led::main {
-        constexpr auto pin = LED_BUILTIN;
+            inline bool isPressed() {
+                return !digitalRead(pin);
+            }
 
-        inline void init() {
-            pinMode(pin, INPUT | OUTPUT);
+            inline void init() {
+                pinMode(pin, mode);
+            }
         }
 
-        inline void on() {
-            digitalWrite(pin, HIGH);
+        namespace move_right_button {
+            constexpr auto pin = GPIO_NUM_9;
+            constexpr auto mode = INPUT;
+
+            inline bool isPressed() {
+                return !digitalRead(pin);
+            }
+
+            inline void init() {
+                pinMode(pin, mode);
+            }
         }
 
-        inline void off() {
-            digitalWrite(pin, LOW);
+        namespace move_up_button {
+            constexpr auto pin = GPIO_NUM_10;
+            constexpr auto mode = INPUT;
+
+            inline bool isPressed() {
+                return !digitalRead(pin);
+            }
+
+            inline void init() {
+                pinMode(pin, mode);
+            }
         }
 
-        inline void flipState() {
-            digitalWrite(pin, !digitalRead(pin));
-        }
-    }
+        namespace move_down_button {
+            constexpr auto pin = GPIO_NUM_11;
+            constexpr auto mode = INPUT;
 
-    namespace serial::main {
-        constexpr auto baud = 115200;
+            inline bool isPressed() {
+                return !digitalRead(pin);
+            }
+
+            inline void init() {
+                pinMode(pin, mode);
+            }
+        }
     }
 }
 
