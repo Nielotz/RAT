@@ -13,12 +13,13 @@
 enum class PacketType : uint8_t {
     DEBUG,
     HANDSHAKE,
+    AUTH,
     UNDEFINED,
 };
 
 /* Packet format:
- * [ uint8_t  ][  uint32_t [[       ]
- * [PacketType][PayloadSize][payload]
+ * [  uint32_t [[ uint8_t  ][       ]
+ * [PayloadSize][PacketType][payload]
  */
 struct Packet {
     const PacketType packetType = PacketType::UNDEFINED;
@@ -83,6 +84,49 @@ struct HandshakePacket : Packet {
     static std::unique_ptr<HandshakePacket> unpack(const std::unique_ptr<Packet> &packet);
 
     static std::unique_ptr<HandshakePacket> unpack(const std::vector<char>& payload);
+
+    std::unique_ptr<Packet> pack() const;
+
+    std::string str() const;
+};
+
+/*
+ * [uint8_t ][  uint8_t  ][uint8_t*]
+ * [AuthType][payloadSize][payload ]
+ */
+struct AuthPacket : Packet {
+    struct CheckUser {
+
+    };
+
+    const PacketType packetType = PacketType::AUTH;
+
+    enum class AuthPacketType : uint8_t {
+        INVALID,
+
+        // SET_USER,  // payload - some user id, for example username
+        // SET_USER_RESPONSE,  // payload - signed payload
+
+        CHECK_USER,   // payload - some user id, for example username
+        CHECK_USER_RESPONSE,  // payload -
+
+        // REMOVE_USER,  // payload - some user id, for example username
+        // REMOVE_USER_RESPONSE,  // payload - signed payload
+    };
+
+    enum class AuthStatus : uint8_t {
+        NONE,
+        VERIFIED,
+        REJECTED
+    };
+
+    AuthPacketType type = AuthPacketType::INVALID;
+
+    explicit AuthPacket(AuthPacketType type, std::string payload);
+
+    static std::unique_ptr<AuthPacket> unpack(const std::unique_ptr<Packet> &packet);
+
+    static std::unique_ptr<AuthPacket> unpack(const std::vector<char>& payload);
 
     std::unique_ptr<Packet> pack() const;
 

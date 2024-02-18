@@ -16,11 +16,14 @@ bool UsbConnection::sendPacket(const std::unique_ptr<Packet> &packet) const {
     if (!usb.availableForWrite())
         return false;
 
-    if (this->usb.write(static_cast<uint8_t>(packet->packetType)) != sizeof(uint8_t))
+    const auto packetSizeBuff = convert32bitTo4<uint32_t, char>(
+         sizeof(uint8_t) + packet->payload.size()
+    );
+
+    if (this->usb.write(packetSizeBuff.data(), sizeof(uint32_t)) != sizeof(uint32_t))
         return false;
 
-    const auto payloadSizeBuff = convert32bitTo4<uint32_t, char>(packet->payload.size());
-    if (this->usb.write(payloadSizeBuff.data(), sizeof(uint32_t)) != sizeof(uint32_t))
+    if (this->usb.write(static_cast<uint8_t>(packet->packetType)) != sizeof(uint8_t))
         return false;
     if (this->usb.write(packet->payload.data(), packet->payload.size()) != packet->payload.size())
         return false;
@@ -32,6 +35,11 @@ std::unique_ptr<Packet> UsbConnection::receivePacket() const {
     if (!usb || !usb.available())
         return nullptr;
 
+    std::vector<char> buffer(sizeof(uint32_t));
+
+    this->usb.readBytes(buffer.data(), sizeof(uint32_t));
+    const uint32_t packetSize = convert4x8BitsTo32<char, uint32_t>(buffer);
+
     PacketType packetType;
     if (const uint8_t readByte = usb.read(); readByte == -1)
         return nullptr;
@@ -40,11 +48,7 @@ std::unique_ptr<Packet> UsbConnection::receivePacket() const {
     else
         packetType = static_cast<PacketType>(readByte);
 
-    std::vector<char> buffer(sizeof(uint32_t));
-
-    this->usb.readBytes(buffer.data(), sizeof(uint32_t));
-    const uint32_t payloadSize = convert4x8BitsTo32<char, uint32_t>(buffer);
-
+    const auto payloadSize = packetSize - sizeof(uint8_t);
     buffer.resize(payloadSize);
     this->usb.readBytes(buffer.data(), payloadSize);
 
@@ -157,15 +161,18 @@ void UsbConnection::handleUsb(int packetsAmountLimit) {
         if (packet == nullptr)
             return;
 
+        // ReSharper disable once CppExpressionWithoutSideEffects
         sendPacket(DebugPacket("Received packet: " + packet->str()).pack());
         switch (packet->packetType) {
             case PacketType::HANDSHAKE: {
+                // ReSharper disable once CppExpressionWithoutSideEffects
                 sendPacket(DebugPacket("Packet is a handshake.").pack());
                 const auto &handshakePacket = HandshakePacket::unpack(packet);
+                // ReSharper disable once CppExpressionWithoutSideEffects
                 this->sendPacket(DebugPacket(handshakePacket->str()).pack());
-                    // ReSharper disable once CppExpressionWithoutSideEffects
 
                 const bool success = handleHanshakePacket(handshakePacket);
+                // ReSharper disable once CppExpressionWithoutSideEffects
                 sendPacket(
                     DebugPacket(std::string("Handled handshake: ") + (success ? "success" : "failed")).pack());
             }
@@ -176,6 +183,5 @@ void UsbConnection::handleUsb(int packetsAmountLimit) {
             default: ;
         }
     }
-    return ;
+    return;
 }
-

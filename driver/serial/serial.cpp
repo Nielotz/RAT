@@ -53,19 +53,19 @@ bool Serial::open() {
 
 bool Serial::writePacket(const std::unique_ptr<Packet> &packet) const {
     const auto packetType = static_cast<uint8_t>(packet->packetType);
-    const auto payloadSize = static_cast<uint32_t>(packet->payload.size());
-    const auto payloadSizePacked = convert32bitTo4<uint32_t, char>(payloadSize);
+    const auto packetSize = static_cast<uint32_t>(packet->payload.size());
+    const auto packetSizePacked = convert32bitTo4<uint32_t, char>(sizeof(packetType) + packetSize);
 
     std::cout << "Sending packet: '" << packet->str() << "', raw: 0x"
-    << std::hex
-    << static_cast<uint32_t>(packetType) << " " << payloadSize << " " << "..." << std::endl
-    << std::dec;
+            << std::hex
+            << packetSize << " " << static_cast<uint32_t>(packetType) << " " << "..." << std::endl
+            << std::dec;
 
+    if (::write(fd, packetSizePacked.data(), sizeof(uint32_t)) != sizeof(uint32_t))
+        return false;
     if (::write(fd, &packetType, 1) != sizeof(uint8_t))
         return false;
-    if (::write(fd, payloadSizePacked.data(), sizeof(uint32_t)) != sizeof(uint32_t))
-        return false;
-    if (::write(fd, packet->payload.data(), payloadSize) != payloadSize)
+    if (::write(fd, packet->payload.data(), packetSize) != packetSize)
         return false;
 
     return true;
@@ -73,13 +73,26 @@ bool Serial::writePacket(const std::unique_ptr<Packet> &packet) const {
 
 
 std::unique_ptr<Packet> Serial::readPacket() const {
-    uint8_t packetTypeBuff;
-    auto readBytes = ::read(fd, &packetTypeBuff, 1);
+    std::vector<char> buff(4);
+
+    auto readBytes = ::read(fd, buff.data(), 4);
     if (readBytes == 0) {
         std::cout << "There is no packet in the queue." << std::endl;
         return nullptr;
     }
+    if (readBytes != 4) {
+        std::cerr << "Error reading packet size: " << strerror(errno) << std::endl;
+        throw;
+    }
+    const uint32_t packetSize = convert4x8BitsTo32<char, uint32_t>(buff);
+    std::cout << "Read packet size: " << packetSize << ", ";
+    if (packetSize == 0) {
+        std::cerr << "Packet size equals 0." << std::endl;
+        throw;
+    }
 
+    uint8_t packetTypeBuff;
+    readBytes = ::read(fd, &packetTypeBuff, 1);
     if (readBytes != 1) {
         std::cerr << "Error reading packet type: " << strerror(errno) << std::endl;
         throw;
@@ -91,21 +104,12 @@ std::unique_ptr<Packet> Serial::readPacket() const {
     else
         packetType = static_cast<PacketType>(packetTypeBuff);
 
-    std::vector<char> buff(4);
-    readBytes = ::read(fd, buff.data(), 4);
-    const uint32_t payloadSize = convert4x8BitsTo32<char, uint32_t>(buff);
-
-    if (readBytes != 4) {
-        std::cerr << "Error reading packet length: " << strerror(errno) << std::endl;
-        throw;
-    }
-    std::cout << "Read payload size: " << payloadSize << ", ";
-
+    const auto payloadSize = packetSize - sizeof(packetTypeBuff);
     std::vector<char> payload(payloadSize);
     readBytes = ::read(fd, payload.data(), payloadSize);
     if (readBytes != payloadSize) {
         std::cerr << "Error reading packet data, read: " << readBytes << "/" << payloadSize
-        << ", error:" << strerror(errno) << std::endl;
+                << ", error:" << strerror(errno) << std::endl;
         throw;
     }
     auto readPacket = std::make_unique<Packet>(packetType, payload);
