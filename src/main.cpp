@@ -39,17 +39,37 @@ void handleMainButton(const UsbConnection &pc) {
     }
 }
 
+bool handleHanshakePacket(UsbConnection &pc, const std::unique_ptr<Packet> &packet) {
+    pc.sendPacket(DebugPacket("Packet is a handshake.").pack());
+    const auto &handshakePacket = HandshakePacket::unpack(packet);
+    pc.sendPacket(DebugPacket(handshakePacket->str()).pack());
+
+    switch (handshakePacket->stage) {
+        case HandshakePacket::HandshakeStage::SYN:
+            pc.syn = 0;
+            return pc.sendPacket(HandshakePacket(HandshakePacket::HandshakeStage::SYN_ACK, pc.syn++).pack());
+        case HandshakePacket::HandshakeStage::SYN_ACK:
+            pc.sendPacket(DebugPacket("uC side SYN_ACK not supported").pack());
+            return false;
+        case HandshakePacket::HandshakeStage::ACK:
+            pc.sendPacket(DebugPacket("Handshake ACK OK").pack());
+            return true;
+        case HandshakePacket::HandshakeStage::INVALID:
+        default:
+            pc.sendPacket(DebugPacket("Received invalid handshake").pack());
+            return false;
+    }
+}
 
 void loop() {
     static int stage = Stage::LOOP_INIT;
     static UsbConnection pc(usbSerial);
-    bool failed = false;
+    constexpr int packetsPerIteration = 10;
 
     switch (stage) {
-        case Stage::LOOP_INIT:
+        case Stage::LOOP_INIT: {
             UsbConnection::debugUsbConnection = &pc;
-            failed = pc.sendPacket(DebugPacket("Starting main loop.").pack());
-            if (failed) {
+            if (!pc.sendPacket(DebugPacket("Starting main loop.").pack())) {
                 control::main::led::flipState();
                 pc.usb.begin();
                 cycleTime = 100;
@@ -57,17 +77,54 @@ void loop() {
                 cycleTime = 10;
                 stage = Stage::MAIN_LOOP;
             }
+        }
 
-        case Stage::MAIN_LOOP:
+        case Stage::MAIN_LOOP: {
             handleMainButton(pc);
-            pc.handleUsb();
+            // handleMouse(pc);
 
-            if (pc.usb)
-                control::main::led::on();
-            else
+            if (!pc.usb) {
                 control::main::led::off();
+                break;
+            }
+            control::main::led::on();
+            pc.setUsbCallback();
+
+            for (auto i = 0; i < packetsPerIteration; i++) {
+                const std::unique_ptr<Packet> packet = pc.receivePacket();
+                if (packet == nullptr)
+                    break; // No available packets.
+
+                // ReSharper disable once CppExpressionWithoutSideEffects
+                pc.sendPacket(DebugPacket("Received packet: " + packet->str()).pack());
+                switch (packet->packetType) {
+                    case PacketType::HANDSHAKE: {
+                        const bool handshaked = handleHanshakePacket(pc, packet);
+                        if (handshaked and pc.syn != static_cast<uint32_t>(-1))
+                            pc.sendPacket(DebugPacket("Handshaked succesfully.").pack());
+                        break;
+                    }
+                    case PacketType::AUTH: {
+                        const auto &authPacket = AuthPacket::unpack(packet);
+                        pc.sendPacket(DebugPacket("Packet is AUTH. Payload: " + authPacket->payload).pack());
+                        switch (authPacket->authType) {
+                            default: ;
+                                break;
+                            case AuthPacket::AuthType::CHECK_USER:
+                                pc.sendPacket(DebugPacket("Packet is CHECK_USER.").pack());
+                                pc.sendPacket(AuthPacket(AuthPacket::AuthType::CHECK_USER_RESPONSE, "VERIFIED").pack());
+                        }
+                    }
+                    break;
+                    case PacketType::DEBUG:
+                    case PacketType::UNDEFINED:
+                    default: ;
+                }
+            }
+
 
             break;
+        }
         case Stage::EXIT:
             // ReSharper disable once CppExpressionWithoutSideEffects
             pc.sendPacket(DebugPacket("Exiting.").pack());

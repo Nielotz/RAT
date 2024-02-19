@@ -9,6 +9,7 @@ UsbConnection *UsbConnection::debugUsbConnection = nullptr;
 
 UsbConnection::UsbConnection(USBCDC &usb)
     : usb(usb) {
+    usb.setRxBufferSize(512);
 }
 
 // TODO: Add reason of failire.
@@ -17,7 +18,7 @@ bool UsbConnection::sendPacket(const std::unique_ptr<Packet> &packet) const {
         return false;
 
     const auto packetSizeBuff = convert32bitTo4<uint32_t, char>(
-         sizeof(uint8_t) + packet->payload.size()
+        sizeof(uint8_t) + packet->payload.size()
     );
 
     if (this->usb.write(packetSizeBuff.data(), sizeof(uint32_t)) != sizeof(uint32_t))
@@ -53,6 +54,13 @@ std::unique_ptr<Packet> UsbConnection::receivePacket() const {
     this->usb.readBytes(buffer.data(), payloadSize);
 
     return std::make_unique<Packet>(packetType, buffer);
+}
+
+void UsbConnection::setUsbCallback() {
+    if (!callbackSet) {
+        // usb.onEvent(usbEventCallback);
+        callbackSet = true;
+    }
 }
 
 // TODO: Handle failed to send.
@@ -127,61 +135,4 @@ void UsbConnection::usbEventCallback(void *arg, esp_event_base_t eventBase, int3
                 break;
         }
     }
-}
-
-bool UsbConnection::handleHanshakePacket(const std::unique_ptr<HandshakePacket> &handshakePacket) {
-    switch (handshakePacket->stage) {
-        case HandshakePacket::HandshakeStage::SYN:
-            this->syn = 0;
-            return this->sendPacket(HandshakePacket(HandshakePacket::HandshakeStage::SYN_ACK, this->syn++).pack());
-        case HandshakePacket::HandshakeStage::SYN_ACK:
-            return this->sendPacket(DebugPacket("uC side SYN_ACK not supported").pack());
-        case HandshakePacket::HandshakeStage::ACK:
-            return this->sendPacket(DebugPacket("Handshake ACK OK").pack());
-        case HandshakePacket::HandshakeStage::INVALID:
-        default:
-            return this->sendPacket(DebugPacket("Received invalid handshake").pack());
-    }
-}
-
-/* Handle usb.
- *
- * Recives up to *packetsAmountLimit* packets, and handles them.
- */
-void UsbConnection::handleUsb(int packetsAmountLimit) {
-    if (!usb)
-        return;
-    if (!callbackSet) {
-        usb.onEvent(usbEventCallback);
-        callbackSet = true;
-    }
-
-    while (--packetsAmountLimit) {
-        const std::unique_ptr<Packet> packet = receivePacket();
-        if (packet == nullptr)
-            return;
-
-        // ReSharper disable once CppExpressionWithoutSideEffects
-        sendPacket(DebugPacket("Received packet: " + packet->str()).pack());
-        switch (packet->packetType) {
-            case PacketType::HANDSHAKE: {
-                // ReSharper disable once CppExpressionWithoutSideEffects
-                sendPacket(DebugPacket("Packet is a handshake.").pack());
-                const auto &handshakePacket = HandshakePacket::unpack(packet);
-                // ReSharper disable once CppExpressionWithoutSideEffects
-                this->sendPacket(DebugPacket(handshakePacket->str()).pack());
-
-                const bool success = handleHanshakePacket(handshakePacket);
-                // ReSharper disable once CppExpressionWithoutSideEffects
-                sendPacket(
-                    DebugPacket(std::string("Handled handshake: ") + (success ? "success" : "failed")).pack());
-            }
-
-            break;
-            case PacketType::DEBUG:
-            case PacketType::UNDEFINED:
-            default: ;
-        }
-    }
-    return;
 }

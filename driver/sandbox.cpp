@@ -12,33 +12,21 @@ constexpr pam_conv conv = {
     nullptr
 };
 
+using std::cout;
+using std::cerr;
+using std::endl;
+using std::string;
 
-int main() {
-    using std::cout;
-    using std::endl;
-
-    pam_handle_t *pamh = nullptr;
-    cout << "Initializing PAM transaction...";
-    int retval = pam_start("sudo", nullptr, &conv, &pamh);
-
-
-    cout << "Connecting to " << path << "... ";
-    Serial serial(path, BaudRate::BR_19200);
-    if (!serial.open()) {
-        cout << "Failed." << endl;
-        return 1;
-    }
-    cout << "Success." << endl;
-
-    cout << "Sending handshake: " << endl;
-    serial.writePacket(HandshakePacket(HandshakePacket::HandshakeStage::SYN).pack());
+bool handshake(const Serial &serial) {
+    if (!serial.writePacket(HandshakePacket(HandshakePacket::HandshakeStage::SYN).pack()))
+        return false;
 
     while (true) {
         cout << "Waiting for a packet..." << endl;
         auto packet = serial.readPacket();
         while (packet == nullptr) {
             constexpr auto oneSecond = 1000000;
-            usleep(oneSecond / 2);
+            usleep(oneSecond / 10);
             packet = serial.readPacket();
         }
 
@@ -53,54 +41,104 @@ int main() {
                     handshakePacket->stage) {
                     case HandshakePacket::HandshakeStage::SYN_ACK:
                         cout << "Packet is SYN_ACK HANDSHAKE. ACK number: " << handshakePacket->ackNumber << endl;
-                        break;
-
+                        if (!serial.writePacket(
+                            HandshakePacket(HandshakePacket::HandshakeStage::ACK,
+                                            handshakePacket->ackNumber + 1).pack()))
+                            return false;
+                        return true;
                     case HandshakePacket::HandshakeStage::SYN:
                         cout << "Packet is SYN HANDSHAKE. Not supported  on PC side." << endl;
-                        break;
+                        return false;
                     case HandshakePacket::HandshakeStage::ACK:
                         cout << "Packet is ACK HANDSHAKE. Not supported  on PC side." << endl;
-                        break;
+                        return false;
                     default:
                     case HandshakePacket::HandshakeStage::INVALID:
                         cout << "Packet is INVALID HANDSHAKE." << endl;
-                        break;
+                        return false;
                 }
-
                 break;
             case PacketType::UNDEFINED:
                 cout << "Packet type is undefined: " << static_cast<uint32_t>(packet->packetType) << endl;
-                break;
+                return false;
             default: ;
         }
     }
+}
 
+bool checkAuth(const Serial &serial, const string &username) {
+    if (!serial.writePacket(AuthPacket(AuthPacket::AuthType::CHECK_USER, username).pack()))
+        return false;
 
-    // Are the credentials correct?
-    if (retval == PAM_SUCCESS) {
-        cout << "Credentials accepted." << endl;
-        retval = pam_authenticate(pamh, 0);
+    while (true) {
+        cout << "Waiting for a packet..." << endl;
+        auto packet = serial.readPacket();
+        while (packet == nullptr) {
+            constexpr auto oneSecond = 1000000;
+            usleep(oneSecond);
+            packet = serial.readPacket();
+        }
+
+        switch (packet->packetType) {
+            case PacketType::DEBUG: {
+                const auto &debugPacket = DebugPacket::unpack(packet);
+                cout << "Packet type is DEBUG. Message: " << debugPacket->message << endl;
+            }
+            break;
+            case PacketType::AUTH: {
+                cout << "Packet is AUTH." << endl;
+                const auto &authPacket = AuthPacket::unpack(packet);
+                if (authPacket == nullptr) {
+                    cerr << "Auth packet is nullptr." << endl;
+                    return false;
+                }
+                switch (authPacket->authType) {
+                    default: ;
+                        return false;
+                    case AuthPacket::AuthType::CHECK_USER:
+                        cout << "Packet is AuthType::CHECK_USER: " << authPacket->payload << endl;
+                        break;
+                    case AuthPacket::AuthType::CHECK_USER_RESPONSE:
+                        cout << "Packet is AuthType::CHECK_USER_RESPONSE: " << authPacket->payload << endl;
+                        return authPacket->payload == "VERIFIED";
+                }
+                break;
+            }
+            case PacketType::HANDSHAKE:
+                cout << "Packet is HANDSHAKE." << endl;
+                return false;
+            case PacketType::UNDEFINED:
+                cout << "Packet type is undefined: " << static_cast<uint32_t>(packet->packetType) << endl;
+                return false;
+            default: ;
+        }
+    }
+}
+
+int main() {
+    cout << "Connecting to " << path << "... ";
+    Serial serial(path, BaudRate::BR_115200);
+    if (!serial.open()) {
+        cout << "Failed." << endl;
+        return 1;
+    }
+    cout << "Success." << endl;
+
+    cout << "Sending handshake: " << endl;
+    if (handshake(serial))
+        cout << "Successfully handshake. " << endl;
+    else {
+        cout << "Failed handshaked. " << endl;
+        return -1;
     }
 
-    // Can the accound be used at this time?
-    if (retval == PAM_SUCCESS) {
-        cout << "Account is valid." << endl;
-        retval = pam_acct_mgmt(pamh, 0);
+    cout << "Checking auth..." << endl;
+    if (checkAuth(serial, "test_username"))
+        cout << "Succesfully checked user. " << endl;
+    else {
+        cout << "Failed checking user. " << endl;
+        return -1;
     }
 
-    // Did everything work?
-    if (retval == PAM_SUCCESS) {
-        cout << "Authenticated" << endl;
-    } else {
-        cout << "Not Authenticated" << endl;
-    }
-
-    // close PAM (end session)
-    if (pam_end(pamh, retval) != PAM_SUCCESS) {
-        pamh = nullptr;
-        cout << "check_user: failed to release authenticator" << endl;
-        exit(1);
-    }
-
-    return retval == PAM_SUCCESS ? 0 : 1;
+    return 0;
 }

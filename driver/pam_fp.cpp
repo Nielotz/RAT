@@ -4,7 +4,6 @@
 
 #include <security/pam_modules.h>
 #include <security/pam_ext.h>
-#include <cstring>
 #include <iostream>
 
 /* expected hook */
@@ -38,6 +37,7 @@ PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh, int flags, int argc, cons
         return PAM_CONV_ERR; // Conversation error.
 
     int retries = 30;
+    bool handshaked = false;
     while (retries--) {
         auto packet = serial.readPacket();
         while (packet == nullptr) {
@@ -45,24 +45,33 @@ PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh, int flags, int argc, cons
             usleep(oneSecond / 100); // 10ms;
             packet = serial.readPacket();
         }
-
-        if (packet->packetType == PacketType::HANDSHAKE) {
-            if (const auto &handshakePacket = HandshakePacket::unpack(packet);
-                handshakePacket->stage == HandshakePacket::HandshakeStage::SYN_ACK) {
-                return PAM_SUCCESS;
-            }
+        switch (packet->packetType) {
+            default:
+                break;
+            case PacketType::HANDSHAKE:
+                if (const auto &handshakePacket = HandshakePacket::unpack(packet);
+                    handshakePacket->stage == HandshakePacket::HandshakeStage::SYN_ACK) {
+                    handshaked = true;
+                    if (!serial.writePacket(AuthPacket(AuthPacket::AuthType::CHECK_USER, username).pack()))
+                        return PAM_CONV_ERR;
+                }
+                break;
+            case PacketType::AUTH:
+                if (!handshaked)
+                    return PAM_AUTHTOK_ERR; /* Authentication token manipulation error */
+                switch (const auto &authPacket = AuthPacket::unpack(packet); authPacket->authType) {
+                    default:
+                        return PAM_CONV_ERR;
+                    case AuthPacket::AuthType::CHECK_USER_RESPONSE:
+                        if (authPacket->payload == "VERIFIED")
+                            return PAM_SUCCESS;
+                        return PAM_USER_UNKNOWN;
+                }
         }
     }
 
     // conversation function is event driven and data is not available yet
     return PAM_CONV_AGAIN;
-
-
-    if (strcmp(username, "rat") != 0) {
-        return PAM_AUTH_ERR;
-    }
-
-    return PAM_SUCCESS;
 }
 
 #endif //PAM_MODULE_H

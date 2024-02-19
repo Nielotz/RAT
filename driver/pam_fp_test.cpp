@@ -18,13 +18,17 @@ int main() {
     using std::endl;
 
     pam_handle_t *pamh = nullptr;
-    cout << "Initializing PAM transaction...";
-    int retval = pam_start("sudo", nullptr, &conv, &pamh);
+    cout << "Initializing PAM transaction..." << endl;
+    std::string username;
+    cout << "Username: " << endl;
+    std::cin >> username;
+
+    int retval = pam_start("sudo", username.c_str(), &conv, &pamh);
 
 
     // Are the credentials correct?
     if (retval == PAM_SUCCESS) {
-        cout << "Credentials accepted." << endl;
+        cout << "Initialized PAM successfully." << endl;
         retval = pam_authenticate(pamh, 0);
     }
 
