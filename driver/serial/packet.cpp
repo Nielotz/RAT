@@ -23,13 +23,16 @@ std::string Packet::str() const {
         case PacketType::HANDSHAKE:
             packetTypeName = "HANDSHAKE";
             break;
+        case PacketType::AUTH:
+            packetTypeName = "AUTH";
+            break;
         case PacketType::UNDEFINED:
             packetTypeName = "UNDEFINED";
             break;
         default: ;
     }
 
-    repr << "Packet: PacketType: " << packetTypeName << ", payload(" << payload.size() << "): ";
+    repr << "PType: " << packetTypeName << ",payload(" << payload.size() << "): ";
     repr << "0x" << std::hex;
     for (const char &elem: payload)
         repr << static_cast<uint32_t>(elem);
@@ -150,4 +153,57 @@ std::string HandshakePacket::str() const {
     }
     repr << "HandshakeStage: " << handshakeStage << ", ackNumber: " << ackNumber;
     return repr.str();
+}
+
+std::unique_ptr<Packet> AuthPacket::pack() const {
+    // [PacketType][AuthType][payloadSize][payload]
+
+    // [PacketType] + [AuthType] + [payloadSize]
+    std::vector<char> packetPayload(sizeof(uint32_t) + sizeof(AuthType));
+    // + [payload]
+    packetPayload.reserve(packetPayload.size() + this->payload.size());
+
+    packetPayload[0] = static_cast<char>(this->authType); // AuthType
+    convert32bitTo4(this->payload.size(), packetPayload, 1); // payloadSize
+    packetPayload.insert(packetPayload.end(), this->payload.begin(), this->payload.end()); // payload
+
+    return std::make_unique<Packet>(PacketType::AUTH, packetPayload);
+}
+
+AuthPacket::AuthPacket(const AuthType authType, const std::string &payload)
+    : authType(authType), payload(payload) {
+}
+
+std::unique_ptr<AuthPacket> AuthPacket::unpack(const std::unique_ptr<Packet> &packet) {
+    // [AuthType][payloadSize][payload]
+
+    const auto &payload = packet->payload;
+    const auto &packetSize = payload.size();
+
+    if (packetSize < sizeof(AuthType) + sizeof(uint32_t))
+        return nullptr;
+
+    auto authTypeByte = static_cast<uint8_t>(payload[0]);
+    if (authTypeByte >= static_cast<uint8_t>(AuthType::INVALID))
+        authTypeByte = static_cast<uint8_t>(AuthType::INVALID);
+    const auto &authType = static_cast<AuthType>(authTypeByte);
+    auto readPayloadBytes = 1;
+
+    const auto payloadSize = convert4x8BitsTo32<char, uint32_t>(payload, readPayloadBytes);
+    readPayloadBytes = 5;
+
+    std::string payloadStr;
+    if (packetSize > readPayloadBytes) {
+        auto payloadStrStart = payload.begin();
+        std::advance(payloadStrStart, readPayloadBytes);
+        auto payloadStrEnd = payloadStrStart;
+        std::advance(payloadStrEnd, payloadSize);
+
+        if (std::distance(payloadStrEnd, payload.end()) < 0)
+            return nullptr;
+
+        payloadStr = std::string(payloadStrStart, payloadStrEnd);
+    }
+
+    return std::make_unique<AuthPacket>(authType, payloadStr);
 }

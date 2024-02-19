@@ -44,13 +44,15 @@ struct DebugPacket : Packet {
     const PacketType packetType = PacketType::DEBUG;
     std::string message = {};
 
-// #ifdef __cpp_fold_expressions
+    // #ifdef __cpp_fold_expressions
     template<typename... T>
     explicit DebugPacket(T... args);
-// #endif
+
+    // #endif
 
     explicit DebugPacket(std::string message);
-    explicit DebugPacket(const char* message);
+
+    explicit DebugPacket(const char *message);
 
     static std::unique_ptr<DebugPacket> unpack(const std::vector<char> &payload);
 
@@ -83,7 +85,7 @@ struct HandshakePacket : Packet {
 
     static std::unique_ptr<HandshakePacket> unpack(const std::unique_ptr<Packet> &packet);
 
-    static std::unique_ptr<HandshakePacket> unpack(const std::vector<char>& payload);
+    static std::unique_ptr<HandshakePacket> unpack(const std::vector<char> &payload);
 
     std::unique_ptr<Packet> pack() const;
 
@@ -91,46 +93,26 @@ struct HandshakePacket : Packet {
 };
 
 /*
- * [uint8_t ][  uint8_t  ][uint8_t*]
- * [AuthType][payloadSize][payload ]
+ * [uint8_t ][  uint8_t  ][string ]
+ * [AuthType][payloadSize][payload]
  */
 struct AuthPacket : Packet {
-    struct CheckUser {
-
+    enum class AuthType : uint8_t {
+        SET_USER, SET_USER_RESPONSE,
+        CHECK_USER, CHECK_USER_RESPONSE,
+        REVOKE_USER, REVOKE_USER_RESPoNSE,
+        INVALID,
     };
 
     const PacketType packetType = PacketType::AUTH;
-
-    enum class AuthPacketType : uint8_t {
-        INVALID,
-
-        // SET_USER,  // payload - some user id, for example username
-        // SET_USER_RESPONSE,  // payload - signed payload
-
-        CHECK_USER,   // payload - some user id, for example username
-        CHECK_USER_RESPONSE,  // payload -
-
-        // REMOVE_USER,  // payload - some user id, for example username
-        // REMOVE_USER_RESPONSE,  // payload - signed payload
-    };
-
-    enum class AuthStatus : uint8_t {
-        NONE,
-        VERIFIED,
-        REJECTED
-    };
-
-    AuthPacketType type = AuthPacketType::INVALID;
-
-    explicit AuthPacket(AuthPacketType type, std::string payload);
+    const AuthType authType = AuthType::INVALID;
+    std::string payload;
 
     static std::unique_ptr<AuthPacket> unpack(const std::unique_ptr<Packet> &packet);
 
-    static std::unique_ptr<AuthPacket> unpack(const std::vector<char>& payload);
-
     std::unique_ptr<Packet> pack() const;
 
-    std::string str() const;
+    explicit AuthPacket(AuthType authType, const std::string &payload);
 };
 
 
