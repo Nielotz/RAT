@@ -66,6 +66,61 @@ bool handshake(const Serial &serial) {
     }
 }
 
+bool setAuth(const Serial &serial, const string &username) {
+    if (!serial.writePacket(AuthPacket(AuthPacket::AuthType::SET_USER, username).pack()))
+        return false;
+
+    while (true) {
+        cout << "Waiting for a packet..." << endl;
+        auto packet = serial.readPacket();
+        while (packet == nullptr) {
+            constexpr auto oneSecond = 1000000;
+            usleep(oneSecond);
+            packet = serial.readPacket();
+        }
+
+        switch (packet->packetType) {
+            case PacketType::DEBUG: {
+                const auto &debugPacket = DebugPacket::unpack(packet);
+                cout << "Packet type is DEBUG. Message: " << debugPacket->message << endl;
+            }
+            break;
+            case PacketType::AUTH: {
+                cout << "Packet is AUTH." << endl;
+                const auto &authPacket = AuthPacket::unpack(packet);
+                if (authPacket == nullptr) {
+                    cerr << "Auth packet is nullptr." << endl;
+                    return false;
+                }
+                switch (authPacket->authType) {
+                    default: ;
+                        return false;
+                    case AuthPacket::AuthType::CHECK_USER:
+                        cout << "Packet is AuthType::CHECK_USER: " << authPacket->payload << endl;
+                        break;
+                    case AuthPacket::AuthType::CHECK_USER_RESPONSE:
+                        cout << "Packet is AuthType::CHECK_USER_RESPONSE: " << authPacket->payload << endl;
+                        break;
+                    case AuthPacket::AuthType::SET_USER:
+                        cout << "Packet is AuthType::SET_USER: " << authPacket->payload << endl;
+                        break;
+                    case AuthPacket::AuthType::SET_USER_RESPONSE:
+                        cout << "Packet is AuthType::SET_USER_RESPONSE: " << authPacket->payload << endl;
+                        return authPacket->payload == "OK";
+                }
+                break;
+            }
+            case PacketType::HANDSHAKE:
+                cout << "Packet is HANDSHAKE." << endl;
+                return false;
+            case PacketType::UNDEFINED:
+                cout << "Packet type is undefined: " << static_cast<uint32_t>(packet->packetType) << endl;
+                return false;
+            default: ;
+        }
+    }
+}
+
 bool checkAuth(const Serial &serial, const string &username) {
     if (!serial.writePacket(AuthPacket(AuthPacket::AuthType::CHECK_USER, username).pack()))
         return false;
@@ -101,6 +156,79 @@ bool checkAuth(const Serial &serial, const string &username) {
                     case AuthPacket::AuthType::CHECK_USER_RESPONSE:
                         cout << "Packet is AuthType::CHECK_USER_RESPONSE: " << authPacket->payload << endl;
                         return authPacket->payload == "VERIFIED";
+                    case AuthPacket::AuthType::SET_USER:
+                        cout << "Packet is AuthType::SET_USER: " << authPacket->payload << endl;
+                        break;
+                    case AuthPacket::AuthType::SET_USER_RESPONSE:
+                        cout << "Packet is AuthType::SET_USER_RESPONSE: " << authPacket->payload << endl;
+                        break;
+                    case AuthPacket::AuthType::REVOKE_USER:
+                        cout << "Packet is AuthType::SET_USER: " << authPacket->payload << endl;
+                        break;
+                    case AuthPacket::AuthType::REVOKE_USER_RESPONSE:
+                        cout << "Packet is AuthType::SET_USER_RESPONSE: " << authPacket->payload << endl;
+                        break;
+                }
+                break;
+            }
+            case PacketType::HANDSHAKE:
+                cout << "Packet is HANDSHAKE." << endl;
+                return false;
+            case PacketType::UNDEFINED:
+                cout << "Packet type is undefined: " << static_cast<uint32_t>(packet->packetType) << endl;
+                return false;
+            default: ;
+        }
+    }
+}
+
+bool revokeAuth(const Serial &serial, const string &username) {
+    if (!serial.writePacket(AuthPacket(AuthPacket::AuthType::CHECK_USER, username).pack()))
+        return false;
+
+    while (true) {
+        cout << "Waiting for a packet..." << endl;
+        auto packet = serial.readPacket();
+        while (packet == nullptr) {
+            constexpr auto oneSecond = 1000000;
+            usleep(oneSecond);
+            packet = serial.readPacket();
+        }
+
+        switch (packet->packetType) {
+            case PacketType::DEBUG: {
+                const auto &debugPacket = DebugPacket::unpack(packet);
+                cout << "Packet type is DEBUG. Message: " << debugPacket->message << endl;
+            }
+            break;
+            case PacketType::AUTH: {
+                cout << "Packet is AUTH." << endl;
+                const auto &authPacket = AuthPacket::unpack(packet);
+                if (authPacket == nullptr) {
+                    cerr << "Auth packet is nullptr." << endl;
+                    return false;
+                }
+                switch (authPacket->authType) {
+                    default: ;
+                        return false;
+                    case AuthPacket::AuthType::CHECK_USER:
+                        cout << "Packet is AuthType::CHECK_USER: " << authPacket->payload << endl;
+                        break;
+                    case AuthPacket::AuthType::CHECK_USER_RESPONSE:
+                        cout << "Packet is AuthType::CHECK_USER_RESPONSE: " << authPacket->payload << endl;
+                        break;
+                    case AuthPacket::AuthType::SET_USER:
+                        cout << "Packet is AuthType::SET_USER: " << authPacket->payload << endl;
+                        break;
+                    case AuthPacket::AuthType::SET_USER_RESPONSE:
+                        cout << "Packet is AuthType::SET_USER_RESPONSE: " << authPacket->payload << endl;
+                        break;
+                    case AuthPacket::AuthType::REVOKE_USER:
+                        cout << "Packet is AuthType::SET_USER: " << authPacket->payload << endl;
+                        break;
+                    case AuthPacket::AuthType::REVOKE_USER_RESPONSE:
+                        cout << "Packet is AuthType::SET_USER_RESPONSE: " << authPacket->payload << endl;
+                        return authPacket->payload == "OK";
                 }
                 break;
             }
@@ -117,7 +245,7 @@ bool checkAuth(const Serial &serial, const string &username) {
 
 int main() {
     cout << "Connecting to " << path << "... ";
-    Serial serial(path, BaudRate::BR_115200);
+    Serial serial(path, BaudRate::BR_460800);
     if (!serial.open()) {
         cout << "Failed." << endl;
         return 1;
@@ -132,11 +260,28 @@ int main() {
         return -1;
     }
 
+    cout << "Setting auth..." << endl;
+    if (setAuth(serial, "test_username"))
+        cout << "Succesfully set user. " << endl;
+    else {
+        cout << "Failed to set user. " << endl;
+        return -1;
+    }
+
+
     cout << "Checking auth..." << endl;
     if (checkAuth(serial, "test_username"))
         cout << "Succesfully checked user. " << endl;
     else {
         cout << "Failed checking user. " << endl;
+        return -1;
+    }
+
+    cout << "Revoking auth..." << endl;
+    if (revokeAuth(serial, "test_username"))
+        cout << "Succesfully removed user. " << endl;
+    else {
+        cout << "Failed removing user. " << endl;
         return -1;
     }
 
