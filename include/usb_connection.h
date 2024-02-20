@@ -10,7 +10,10 @@ public:
     USBCDC& usb;
     uint32_t syn = -1;
     explicit UsbConnection(USBCDC &usb);
+
     bool sendPacket(const std::unique_ptr<Packet> &packet) const;
+
+    bool sendPacket(const Packet &packet) const;
 
     /* Receive packet or nullptr when no packet available. */
     std::unique_ptr<Packet> receivePacket() const;

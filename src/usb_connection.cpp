@@ -12,7 +12,9 @@ UsbConnection::UsbConnection(USBCDC &usb)
     usb.setRxBufferSize(512);
 }
 
-// TODO: Add reason of failire.
+
+
+
 bool UsbConnection::sendPacket(const std::unique_ptr<Packet> &packet) const {
     if (!usb.availableForWrite())
         return false;
@@ -30,6 +32,10 @@ bool UsbConnection::sendPacket(const std::unique_ptr<Packet> &packet) const {
         return false;
 
     return true;
+}
+
+bool UsbConnection::sendPacket(const Packet& packet) const {
+     return sendPacket(packet.pack());
 }
 
 std::unique_ptr<Packet> UsbConnection::receivePacket() const {
@@ -63,7 +69,6 @@ void UsbConnection::setUsbCallback() {
     }
 }
 
-// TODO: Handle failed to send.
 // ReSharper disable once CppParameterMayBeConst
 void UsbConnection::usbEventCallback(void *arg, esp_event_base_t eventBase, int32_t eventId, void *eventData) {
     bool failed = false;
