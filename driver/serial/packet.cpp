@@ -41,6 +41,10 @@ std::string Packet::str() const {
     return repr.str();
 }
 
+std::unique_ptr<Packet> Packet::pack() const {
+    return std::make_unique<Packet>(packetType, payload);
+}
+
 
 UndefinedPacket::UndefinedPacket(const std::vector<char> &payload)
     : Packet(PacketType::UNDEFINED, payload) {

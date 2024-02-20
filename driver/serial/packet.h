@@ -27,20 +27,28 @@ struct Packet {
 
     Packet() = default;
 
+    virtual ~Packet() = default;
+
     Packet(PacketType packetType, const std::vector<char> &payload);
 
     Packet(PacketType packetType, const std::string &payload);
 
-    std::string str() const;
+    virtual std::string str() const;
+
+    virtual std::unique_ptr<Packet> pack() const;
 };
 
 struct UndefinedPacket : Packet {
     const PacketType packetType = PacketType::UNDEFINED;
 
     explicit UndefinedPacket(const std::vector<char> &payload);
+
+    ~UndefinedPacket() override = default;
+
+    std::unique_ptr<Packet> pack() const override = 0;
 };
 
-struct DebugPacket : Packet {
+struct DebugPacket final : Packet {
     const PacketType packetType = PacketType::DEBUG;
     std::string message = {};
 
@@ -54,13 +62,15 @@ struct DebugPacket : Packet {
 
     explicit DebugPacket(const char *message);
 
+    ~DebugPacket() override = default;
+
     static std::unique_ptr<DebugPacket> unpack(const std::vector<char> &payload);
 
     static std::unique_ptr<DebugPacket> unpack(const Packet &packet);
 
     static std::unique_ptr<DebugPacket> unpack(const std::unique_ptr<Packet> &packet);
 
-    std::unique_ptr<Packet> pack() const;
+    std::unique_ptr<Packet> pack() const override;
 };
 
 /*
@@ -68,7 +78,7 @@ struct DebugPacket : Packet {
  * [   uint8_t    ]{ uint32_t }
  * [HandshakeStage]{ACK number}
  */
-struct HandshakePacket : Packet {
+struct HandshakePacket final : Packet {
     const PacketType packetType = PacketType::HANDSHAKE;
 
     enum class HandshakeStage : uint8_t {
@@ -87,20 +97,20 @@ struct HandshakePacket : Packet {
 
     static std::unique_ptr<HandshakePacket> unpack(const std::vector<char> &payload);
 
-    std::unique_ptr<Packet> pack() const;
+    std::unique_ptr<Packet> pack() const override;
 
-    std::string str() const;
+    std::string str() const override;
 };
 
 /*
  * [uint8_t ][  uint8_t  ][string ]
  * [AuthType][payloadSize][payload]
  */
-struct AuthPacket : Packet {
+struct AuthPacket final : Packet {
     enum class AuthType : uint8_t {
         SET_USER, SET_USER_RESPONSE,
         CHECK_USER, CHECK_USER_RESPONSE,
-        REVOKE_USER, REVOKE_USER_RESPoNSE,
+        REVOKE_USER, REVOKE_USER_RESPONSE,
         INVALID,
     };
 
@@ -110,9 +120,10 @@ struct AuthPacket : Packet {
 
     static std::unique_ptr<AuthPacket> unpack(const std::unique_ptr<Packet> &packet);
 
-    std::unique_ptr<Packet> pack() const;
+    std::unique_ptr<Packet> pack() const override;
 
     explicit AuthPacket(AuthType authType, const std::string &payload);
+    ~AuthPacket() override = default;
 };
 
 
