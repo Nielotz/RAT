@@ -35,7 +35,7 @@ bool Serial::open() {
 
     tty.c_cflag &= ~CRTSCTS; // no flow control
     tty.c_cc[VMIN] = 1; // Minimal bytes received to be able to return from read.
-    tty.c_cc[VTIME] = 10; // Timeout in tenths of a second to a next data byte income.
+    tty.c_cc[VTIME] = 5; // Timeout in tenths of a second to a next data byte income.
     tty.c_cflag |= CREAD | CLOCAL; // turn on READ & ignore ctrl lines
 
     /* Make raw */

@@ -26,7 +26,7 @@ bool handshake(const Serial &serial) {
         auto packet = serial.readPacket();
         while (packet == nullptr) {
             constexpr auto oneSecond = 1000000;
-            usleep(oneSecond / 10);
+            usleep(oneSecond / 100);
             packet = serial.readPacket();
         }
 
@@ -66,7 +66,7 @@ bool handshake(const Serial &serial) {
     }
 }
 
-bool setAuth(const Serial &serial, const string &username) {
+bool authSetUser(const Serial &serial, const string &username) {
     if (!serial.writePacket(AuthPacket(AuthPacket::AuthType::SET_USER, username)))
         return false;
 
@@ -75,7 +75,7 @@ bool setAuth(const Serial &serial, const string &username) {
         auto packet = serial.readPacket();
         while (packet == nullptr) {
             constexpr auto oneSecond = 1000000;
-            usleep(oneSecond);
+            usleep(oneSecond / 100);
             packet = serial.readPacket();
         }
 
@@ -121,7 +121,7 @@ bool setAuth(const Serial &serial, const string &username) {
     }
 }
 
-bool checkAuth(const Serial &serial, const string &username) {
+bool authCheckUser(const Serial &serial, const string &username) {
     if (!serial.writePacket(AuthPacket(AuthPacket::AuthType::CHECK_USER, username)))
         return false;
 
@@ -130,7 +130,7 @@ bool checkAuth(const Serial &serial, const string &username) {
         auto packet = serial.readPacket();
         while (packet == nullptr) {
             constexpr auto oneSecond = 1000000;
-            usleep(oneSecond);
+            usleep(oneSecond / 100);
             packet = serial.readPacket();
         }
 
@@ -182,8 +182,8 @@ bool checkAuth(const Serial &serial, const string &username) {
     }
 }
 
-bool revokeAuth(const Serial &serial, const string &username) {
-    if (!serial.writePacket(AuthPacket(AuthPacket::AuthType::CHECK_USER, username)))
+bool authRevokeUser(const Serial &serial, const string &username) {
+    if (!serial.writePacket(AuthPacket(AuthPacket::AuthType::REVOKE_USER, username)))
         return false;
 
     while (true) {
@@ -191,7 +191,7 @@ bool revokeAuth(const Serial &serial, const string &username) {
         auto packet = serial.readPacket();
         while (packet == nullptr) {
             constexpr auto oneSecond = 1000000;
-            usleep(oneSecond);
+            usleep(oneSecond / 100);
             packet = serial.readPacket();
         }
 
@@ -224,10 +224,10 @@ bool revokeAuth(const Serial &serial, const string &username) {
                         cout << "Packet is AuthType::SET_USER_RESPONSE: " << authPacket->payload << endl;
                         break;
                     case AuthPacket::AuthType::REVOKE_USER:
-                        cout << "Packet is AuthType::SET_USER: " << authPacket->payload << endl;
+                        cout << "Packet is AuthType::REVOKE_USER: " << authPacket->payload << endl;
                         break;
                     case AuthPacket::AuthType::REVOKE_USER_RESPONSE:
-                        cout << "Packet is AuthType::SET_USER_RESPONSE: " << authPacket->payload << endl;
+                        cout << "Packet is AuthType::REVOKE_USER_RESPONSE: " << authPacket->payload << endl;
                         return authPacket->payload == "OK";
                 }
                 break;
@@ -245,7 +245,7 @@ bool revokeAuth(const Serial &serial, const string &username) {
 
 int main() {
     cout << "Connecting to " << path << "... ";
-    Serial serial(path, BaudRate::BR_460800);
+    Serial serial(path, BaudRate::BR_1152000);
     if (!serial.open()) {
         cout << "Failed." << endl;
         return 1;
@@ -261,7 +261,7 @@ int main() {
     }
 
     cout << "Setting auth..." << endl;
-    if (setAuth(serial, "test_username"))
+    if (authSetUser(serial, "test_username"))
         cout << "Succesfully set user. " << endl;
     else {
         cout << "Failed to set user. " << endl;
@@ -270,7 +270,7 @@ int main() {
 
 
     cout << "Checking auth..." << endl;
-    if (checkAuth(serial, "test_username"))
+    if (authCheckUser(serial, "test_username"))
         cout << "Succesfully checked user. " << endl;
     else {
         cout << "Failed checking user. " << endl;
@@ -278,7 +278,7 @@ int main() {
     }
 
     cout << "Revoking auth..." << endl;
-    if (revokeAuth(serial, "test_username"))
+    if (authRevokeUser(serial, "test_username"))
         cout << "Succesfully removed user. " << endl;
     else {
         cout << "Failed removing user. " << endl;
