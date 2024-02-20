@@ -33,7 +33,7 @@ PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh, int flags, int argc, cons
     }
 
     /* HANDSHAKE */
-    if (const bool success = serial.writePacket(HandshakePacket(HandshakePacket::HandshakeStage::SYN).pack()); !success)
+    if (const bool success = serial.writePacket(HandshakePacket(HandshakePacket::HandshakeStage::SYN)); !success)
         return PAM_CONV_ERR; // Conversation error.
 
     int retries = 30;
@@ -52,7 +52,7 @@ PAM_EXTERN int pam_sm_authenticate(pam_handle_t *pamh, int flags, int argc, cons
                 if (const auto &handshakePacket = HandshakePacket::unpack(packet);
                     handshakePacket->stage == HandshakePacket::HandshakeStage::SYN_ACK) {
                     handshaked = true;
-                    if (!serial.writePacket(AuthPacket(AuthPacket::AuthType::CHECK_USER, username).pack()))
+                    if (!serial.writePacket(AuthPacket(AuthPacket::AuthType::CHECK_USER, username)))
                         return PAM_CONV_ERR;
                 }
                 break;

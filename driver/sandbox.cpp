@@ -18,7 +18,7 @@ using std::endl;
 using std::string;
 
 bool handshake(const Serial &serial) {
-    if (!serial.writePacket(HandshakePacket(HandshakePacket::HandshakeStage::SYN).pack()))
+    if (!serial.writePacket(HandshakePacket(HandshakePacket::HandshakeStage::SYN)))
         return false;
 
     while (true) {
@@ -43,7 +43,7 @@ bool handshake(const Serial &serial) {
                         cout << "Packet is SYN_ACK HANDSHAKE. ACK number: " << handshakePacket->ackNumber << endl;
                         if (!serial.writePacket(
                             HandshakePacket(HandshakePacket::HandshakeStage::ACK,
-                                            handshakePacket->ackNumber + 1).pack()))
+                                            handshakePacket->ackNumber + 1)))
                             return false;
                         return true;
                     case HandshakePacket::HandshakeStage::SYN:
@@ -67,7 +67,7 @@ bool handshake(const Serial &serial) {
 }
 
 bool setAuth(const Serial &serial, const string &username) {
-    if (!serial.writePacket(AuthPacket(AuthPacket::AuthType::SET_USER, username).pack()))
+    if (!serial.writePacket(AuthPacket(AuthPacket::AuthType::SET_USER, username)))
         return false;
 
     while (true) {
@@ -122,7 +122,7 @@ bool setAuth(const Serial &serial, const string &username) {
 }
 
 bool checkAuth(const Serial &serial, const string &username) {
-    if (!serial.writePacket(AuthPacket(AuthPacket::AuthType::CHECK_USER, username).pack()))
+    if (!serial.writePacket(AuthPacket(AuthPacket::AuthType::CHECK_USER, username)))
         return false;
 
     while (true) {
@@ -183,7 +183,7 @@ bool checkAuth(const Serial &serial, const string &username) {
 }
 
 bool revokeAuth(const Serial &serial, const string &username) {
-    if (!serial.writePacket(AuthPacket(AuthPacket::AuthType::CHECK_USER, username).pack()))
+    if (!serial.writePacket(AuthPacket(AuthPacket::AuthType::CHECK_USER, username)))
         return false;
 
     while (true) {

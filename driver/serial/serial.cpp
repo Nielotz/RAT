@@ -51,6 +51,10 @@ bool Serial::open() {
     return true;
 }
 
+bool Serial::writePacket(const Packet &packet) const {
+    return writePacket(packet.pack());
+}
+
 bool Serial::writePacket(const std::unique_ptr<Packet> &packet) const {
     const auto packetType = static_cast<uint8_t>(packet->packetType);
     const auto packetSize = static_cast<uint32_t>(packet->payload.size());

@@ -35,6 +35,8 @@ public:
 
     bool open();
 
+    bool writePacket(const Packet &packet) const;
+
     bool writePacket(const std::unique_ptr<Packet> &packet) const;
 
     std::unique_ptr<Packet> readPacket() const;
