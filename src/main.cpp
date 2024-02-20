@@ -131,13 +131,17 @@ void loop() {
                                 pc.sendPacket(DebugPacket("Packet is SET_USER."));
                                 if (!fingerPrintScanner.isConnected()) {
                                     pc.sendPacket(DebugPacket("Fingerprint scanner is not connected."));
-                                    pc.sendPacket(AuthPacket(AuthPacket::AuthType::SET_USER_RESPONSE, "FAIL")
-                                        );
                                 }
+                                pc.sendPacket(AuthPacket(AuthPacket::AuthType::SET_USER_RESPONSE, "OK"));
                             case AuthPacket::AuthType::CHECK_USER:
                                 pc.sendPacket(DebugPacket("Packet is CHECK_USER."));
                                 pc.sendPacket(AuthPacket(AuthPacket::AuthType::CHECK_USER_RESPONSE,
                                                          "VERIFIED"));
+                                break;
+                            case AuthPacket::AuthType::REVOKE_USER:
+                                pc.sendPacket(DebugPacket("Packet is CHECK_USER."));
+                                pc.sendPacket(AuthPacket(AuthPacket::AuthType::REVOKE_USER_RESPONSE,
+                                                         "OK"));
                                 break;
                         }
                     }

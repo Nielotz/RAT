@@ -9,7 +9,7 @@ UsbConnection *UsbConnection::debugUsbConnection = nullptr;
 
 UsbConnection::UsbConnection(USBCDC &usb)
     : usb(usb) {
-    usb.setRxBufferSize(512);
+    usb.setRxBufferSize(1024);
 }
 
 
