@@ -33,10 +33,11 @@ std::string Packet::str() const {
     }
 
     repr << "PType: " << packetTypeName << ",payload(" << payload.size() << "): ";
-    repr << "0x" << std::hex;
-    for (const char &elem: payload)
-        repr << static_cast<uint32_t>(elem);
-    repr << std::dec;
+    repr << std::string(payload.begin(), payload.end());
+    // repr << "0x" << std::hex;
+    // for (const char &elem: payload)
+        // repr << static_cast<uint32_t>(elem);
+    // repr << std::dec;
 
     return repr.str();
 }
