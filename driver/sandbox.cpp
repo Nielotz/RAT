@@ -162,7 +162,7 @@ bool authCheckUser(const Serial &serial, const string &username) {
                     case AuthPacket::AuthType::SET_USER_RESPONSE:
                         cout << "Packet is AuthType::SET_USER_RESPONSE: " << authPacket->payload << endl;
                         break;
-                    case AuthPacket::AuthType::REVOKE_USER:
+                    case AuthPacket::AuthType::REMOVE_USER:
                         cout << "Packet is AuthType::SET_USER: " << authPacket->payload << endl;
                         break;
                     case AuthPacket::AuthType::REVOKE_USER_RESPONSE:
@@ -183,7 +183,7 @@ bool authCheckUser(const Serial &serial, const string &username) {
 }
 
 bool authRevokeUser(const Serial &serial, const string &username) {
-    if (!serial.writePacket(AuthPacket(AuthPacket::AuthType::REVOKE_USER, username)))
+    if (!serial.writePacket(AuthPacket(AuthPacket::AuthType::REMOVE_USER, username)))
         return false;
 
     while (true) {
@@ -223,7 +223,7 @@ bool authRevokeUser(const Serial &serial, const string &username) {
                     case AuthPacket::AuthType::SET_USER_RESPONSE:
                         cout << "Packet is AuthType::SET_USER_RESPONSE: " << authPacket->payload << endl;
                         break;
-                    case AuthPacket::AuthType::REVOKE_USER:
+                    case AuthPacket::AuthType::REMOVE_USER:
                         cout << "Packet is AuthType::REVOKE_USER: " << authPacket->payload << endl;
                         break;
                     case AuthPacket::AuthType::REVOKE_USER_RESPONSE:
