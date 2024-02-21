@@ -31,7 +31,7 @@ enum struct BaudRate {
 
 class Serial {
 public:
-    Serial(std::string path, BaudRate baudRate);
+    Serial(std::string path, BaudRate baudRate, std::string coutPrefix = "");
 
     bool open();
 
@@ -46,6 +46,7 @@ private:
     int fd = -1;
     const std::string path;
     const BaudRate baudRate;
+    const std::string coutPrefix;
 };
 
 

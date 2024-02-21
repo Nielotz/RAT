@@ -1,19 +1,20 @@
 #include <iostream>
 #include <unistd.h>
 #include <cstring>
+#include <utility>
 
 #include "serial.h"
 #include "converters.h"
 #include "packet.h"
 
-Serial::Serial(std::string path, const BaudRate baudRate)
-    : path(std::move(path)), baudRate(baudRate) {
+Serial::Serial(std::string path, const BaudRate baudRate, std::string coutPrefix)
+    : path(std::move(path)), baudRate(baudRate), coutPrefix(std::move(coutPrefix)) {
 }
 
 bool Serial::open() {
     fd = ::open(path.c_str(), O_RDWR | O_NOCTTY);
 
-    std::cout << "File descriptor: " << fd << std::endl;
+    std::cout << coutPrefix << "File descriptor: " << fd << std::endl;
     if (fd == -1)
         return false;
 
@@ -60,7 +61,7 @@ bool Serial::writePacket(const std::unique_ptr<Packet> &packet) const {
     const auto packetSize = static_cast<uint32_t>(packet->payload.size());
     const auto packetSizePacked = convert32bitTo4<uint32_t, char>(sizeof(packetType) + packetSize);
 
-    std::cout << "Sending packet: '" << packet->str() << "', raw: 0x"
+    std::cout << coutPrefix << "Sending packet: '" << packet->str() << "', raw: 0x"
             << std::hex
             << packetSize << " " << static_cast<uint32_t>(packetType) << " " << "..." << std::endl
             << std::dec;
@@ -81,7 +82,7 @@ std::unique_ptr<Packet> Serial::readPacket() const {
 
     auto readBytes = ::read(fd, buff.data(), 4);
     if (readBytes == 0) {
-        std::cout << "There is no packet in the queue." << std::endl;
+        std::cout << coutPrefix << "There is no packet in the queue." << std::endl;
         return nullptr;
     }
     if (readBytes != 4) {
@@ -89,7 +90,7 @@ std::unique_ptr<Packet> Serial::readPacket() const {
         throw;
     }
     const uint32_t packetSize = convert4x8BitsTo32<char, uint32_t>(buff);
-    std::cout << "Read packet size: " << packetSize << ", ";
+    std::cout << coutPrefix << "Read packet size: " << packetSize << ", ";
     if (packetSize == 0) {
         std::cerr << "Packet size equals 0." << std::endl;
         throw;
@@ -117,6 +118,6 @@ std::unique_ptr<Packet> Serial::readPacket() const {
         throw;
     }
     auto readPacket = std::make_unique<Packet>(packetType, payload);
-    std::cout << readPacket->str() << "'" << std::endl;
+    std::cout << coutPrefix << readPacket->str() << "'" << std::endl;
     return readPacket;
 }
