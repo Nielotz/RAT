@@ -9,14 +9,14 @@
 #include "usb_connection.h"
 
 #define FP_UART_NUM UART_NUM_1
-#define FP_UART_RX GPIO_NUM_4
-#define FP_UART_TX GPIO_NUM_5
-#define FP_UART_IRQ GPIO_NUM_6
-#define FP_UART_VCC GPIO_NUM_7
+#define FP_UART_RX GPIO_NUM_4  // black
+#define FP_UART_TX GPIO_NUM_5  // yellow
+#define FP_UART_IRQ GPIO_NUM_6  // blue
+#define FP_UART_VCC GPIO_NUM_7  // green
 
 SFM_Module fingerPrintScanner(FP_UART_VCC, FP_UART_IRQ, FP_UART_TX, FP_UART_RX);
 
-void sfmPinInt1() {
+void IRAM_ATTR sfmPinInt1() {
     fingerPrintScanner.pinInterrupt();
 }
 
@@ -78,10 +78,169 @@ bool handleHanshakePacket(UsbConnection &pc, const std::unique_ptr<Packet> &pack
     }
 }
 
+enum class AuthStage {
+    NONE,
+    REGISTER,
+    REGISTER_STAGE_1,
+    REGISTER_STAGE_1_RELEASE,
+    REGISTER_STAGE_2,
+    REGISTER_STAGE_2_RELEASE,
+    REGISTER_STAGE_3,
+    REGISTER_STAGE_3_RELEASE,
+};
+
+void handleNetwork(UsbConnection &pc, AuthStage &authStage, const int packetsPerIteration = 20) {
+    for (auto i = 0; i < packetsPerIteration; i++) {
+        const std::unique_ptr<Packet> packet = pc.receivePacket();
+        if (packet == nullptr)
+            break; // No available packets.
+
+        // ReSharper disable once CppExpressionWithoutSideEffects
+        pc.sendPacket(DebugPacket("Received packet: " + packet->str()));
+        switch (packet->packetType) {
+            case PacketType::HANDSHAKE: {
+                if (handleHanshakePacket(pc, packet) and pc.syn != static_cast<uint32_t>(-1))
+                    pc.sendPacket(DebugPacket("Handshaked succesfully."));
+                break;
+            }
+            case PacketType::AUTH: {
+                pc.sendPacket(DebugPacket("Packet is AUTH"));
+                if (pc.syn == static_cast<uint32_t>(-1)) {
+                    pc.sendPacket(DebugPacket("Cannot handle AUTH while handshake is not set."));
+                    break;
+                }
+                if (!fingerPrintScanner.isConnected()) {
+                    pc.sendPacket(DebugPacket("Fingerprint scanner is not connected."));
+                    break;
+                }
+
+                const auto &authPacket = AuthPacket::unpack(packet);
+                pc.sendPacket(DebugPacket("Payload: " + authPacket->payload));
+                switch (authPacket->authType) {
+                    default: ;
+                        break;
+                    case AuthPacket::AuthType::SET_USER:
+                        pc.sendPacket(DebugPacket("Packet is SET_USER."));
+                        authStage = AuthStage::REGISTER;
+                        break;
+                    case AuthPacket::AuthType::CHECK_USER:
+                        pc.sendPacket(DebugPacket("Packet is CHECK_USER."));
+                        pc.sendPacket(AuthPacket(AuthPacket::AuthType::CHECK_USER_RESPONSE,
+                                                 "VERIFIED"));
+                        break;
+                    case AuthPacket::AuthType::REVOKE_USER:
+                        pc.sendPacket(DebugPacket("Packet is CHECK_USER."));
+                        pc.sendPacket(AuthPacket(AuthPacket::AuthType::REVOKE_USER_RESPONSE,
+                                                 "OK"));
+                        break;
+                }
+            }
+            break;
+            case PacketType::DEBUG:
+            case PacketType::UNDEFINED:
+            default: ;
+        }
+    }
+}
+
+
+void handleAuth(const UsbConnection &pc, AuthStage &authStage) {
+    bool fail = false;
+    switch (authStage) {
+        case AuthStage::REGISTER: {
+            fingerPrintScanner.enable();
+            pc.sendPacket(DebugPacket("[AUTH 0/3] Rozpoczęto proces dodawania odcisku palca."));
+            fingerPrintScanner.setRingColor(SFM_RING_PURPLE, SFM_RING_BLUE, 100);
+
+            authStage = AuthStage::REGISTER_STAGE_1;
+            pc.sendPacket(DebugPacket("[AUTH 1/3] Przyłóż palec do czytnika."));
+        }
+
+        case AuthStage::REGISTER_STAGE_1: {
+            if (!fingerPrintScanner.isTouched())
+                break;
+            fingerPrintScanner.setRingColor(SFM_RING_PURPLE);
+            if (fingerPrintScanner.register_3c3r_1st() != SFM_ACK_SUCCESS) {
+                pc.sendPacket(DebugPacket("[AUTH 1/3] Wystąpił błąd."));
+                fail = true;
+                break;
+            }
+            fingerPrintScanner.setRingColor(SFM_RING_GREEN);
+            pc.sendPacket(DebugPacket("[AUTH 1/3] OK. Odsuń palec od czytnika."));
+            authStage = AuthStage::REGISTER_STAGE_1_RELEASE;
+        }
+
+        case AuthStage::REGISTER_STAGE_1_RELEASE: {
+            if (fingerPrintScanner.isTouched())
+                break;
+            authStage = AuthStage::REGISTER_STAGE_2;
+            pc.sendPacket(DebugPacket("[AUTH 2/3] Przyłóż palec do czytnika."));
+            fingerPrintScanner.setRingColor(SFM_RING_PURPLE, SFM_RING_CYAN, 100);
+        }
+
+        case AuthStage::REGISTER_STAGE_2: {
+            if (!fingerPrintScanner.isTouched())
+                break;
+            fingerPrintScanner.setRingColor(SFM_RING_PURPLE);
+            if (fingerPrintScanner.register_3c3r_2nd() != SFM_ACK_SUCCESS) {
+                pc.sendPacket(DebugPacket("[AUTH 2/3] Wystąpił błąd."));
+                fail = true;
+                break;
+            }
+            fingerPrintScanner.setRingColor(SFM_RING_GREEN);
+            pc.sendPacket(DebugPacket("[AUTH 2/3] OK. Odsuń palec od czytnika."));
+            authStage = AuthStage::REGISTER_STAGE_2_RELEASE;
+        }
+
+        case AuthStage::REGISTER_STAGE_2_RELEASE: {
+            if (fingerPrintScanner.isTouched())
+                break;
+            authStage = AuthStage::REGISTER_STAGE_3;
+            pc.sendPacket(DebugPacket("[AUTH 3/3] Przyłóż palec do czytnika."));
+            fingerPrintScanner.setRingColor(SFM_RING_PURPLE, SFM_RING_GREEN, 100);
+        }
+
+        case AuthStage::REGISTER_STAGE_3: {
+            if (!fingerPrintScanner.isTouched())
+                break;
+            fingerPrintScanner.setRingColor(SFM_RING_PURPLE);
+            uint16_t uid = 0;
+            if (fingerPrintScanner.register_3c3r_3rd(uid) != SFM_ACK_SUCCESS or uid == 0) {
+                pc.sendPacket(DebugPacket("[AUTH 3/3] Wystąpił błąd."));
+                fail = true;
+                break;
+            }
+
+            fingerPrintScanner.setRingColor(SFM_RING_GREEN);
+            using std::string;
+            using std::to_string;
+            pc.sendPacket(DebugPacket(string("[AUTH 3/3] OK. uuid: ") + to_string(static_cast<uint32_t>(uid))));
+            pc.sendPacket(AuthPacket(AuthPacket::AuthType::SET_USER_RESPONSE, "OK"));
+            authStage = AuthStage::REGISTER_STAGE_3_RELEASE;
+        }
+
+        case AuthStage::REGISTER_STAGE_3_RELEASE: {
+            if (fingerPrintScanner.isTouched())
+                break;
+            authStage = AuthStage::NONE;
+            fingerPrintScanner.setRingColor(SFM_RING_OFF);
+        }
+
+        default:
+            return;
+    }
+
+    if (fail) {
+        fingerPrintScanner.setRingColor(SFM_RING_RED, SFM_RING_RED);
+        pc.sendPacket(AuthPacket(AuthPacket::AuthType::SET_USER_RESPONSE, "FAIL"));
+        authStage = AuthStage::NONE;
+    }
+}
+
 void loop() {
     static int stage = Stage::LOOP_INIT;
     static UsbConnection pc(usbSerial);
-    constexpr int packetsPerIteration = 20;
+    static auto authStage = AuthStage::NONE;
 
     switch (stage) {
         case Stage::LOOP_INIT: {
@@ -99,62 +258,16 @@ void loop() {
         case Stage::MAIN_LOOP: {
             handleMainButton(pc);
             // handleMouse(pc);
-
-            if (!pc.usb) {
+            if (authStage != AuthStage::NONE)
+                handleAuth(pc, authStage);
+            if (pc.usb) {
+                pc.setUsbCallback();
+                handleNetwork(pc, authStage);
+                control::main::led::on();
+            } else
                 control::main::led::off();
-                break;
-            }
-            control::main::led::on();
-            pc.setUsbCallback();
-
-            for (auto i = 0; i < packetsPerIteration; i++) {
-                const std::unique_ptr<Packet> packet = pc.receivePacket();
-                if (packet == nullptr)
-                    break; // No available packets.
-
-                // ReSharper disable once CppExpressionWithoutSideEffects
-                pc.sendPacket(DebugPacket("Received packet: " + packet->str()));
-                switch (packet->packetType) {
-                    case PacketType::HANDSHAKE: {
-                        const bool handshaked = handleHanshakePacket(pc, packet);
-                        if (handshaked and pc.syn != static_cast<uint32_t>(-1))
-                            pc.sendPacket(DebugPacket("Handshaked succesfully."));
-                        break;
-                    }
-                    case PacketType::AUTH: {
-                        const auto &authPacket = AuthPacket::unpack(packet);
-                        pc.sendPacket(DebugPacket("Packet is AUTH. Payload: " + authPacket->payload));
-                        switch (authPacket->authType) {
-                            default: ;
-                                break;
-                            case AuthPacket::AuthType::SET_USER:
-                                pc.sendPacket(DebugPacket("Packet is SET_USER."));
-                                if (!fingerPrintScanner.isConnected()) {
-                                    pc.sendPacket(DebugPacket("Fingerprint scanner is not connected."));
-                                }
-                                pc.sendPacket(AuthPacket(AuthPacket::AuthType::SET_USER_RESPONSE, "OK"));
-                            case AuthPacket::AuthType::CHECK_USER:
-                                pc.sendPacket(DebugPacket("Packet is CHECK_USER."));
-                                pc.sendPacket(AuthPacket(AuthPacket::AuthType::CHECK_USER_RESPONSE,
-                                                         "VERIFIED"));
-                                break;
-                            case AuthPacket::AuthType::REVOKE_USER:
-                                pc.sendPacket(DebugPacket("Packet is CHECK_USER."));
-                                pc.sendPacket(AuthPacket(AuthPacket::AuthType::REVOKE_USER_RESPONSE,
-                                                         "OK"));
-                                break;
-                        }
-                    }
-                    break;
-                    case PacketType::DEBUG:
-                    case PacketType::UNDEFINED:
-                    default: ;
-                }
-            }
-
-
-            break;
         }
+        break;
         case Stage::EXIT:
             // ReSharper disable once CppExpressionWithoutSideEffects
             pc.sendPacket(DebugPacket("Exiting."));
