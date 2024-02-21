@@ -254,21 +254,22 @@ int main() {
 
     cout << "Sending handshake: " << endl;
     if (handshake(serial))
-        cout << "Successfully handshake. " << endl;
+        cout << "Successfully handshaked. " << endl;
     else {
         cout << "Failed handshaked. " << endl;
         return -1;
     }
 
-    cout << "Setting auth..." << endl;
-    if (authSetUser(serial, "test_username"))
-        cout << "Succesfully set user. " << endl;
-    else {
-        cout << "Failed to set user. " << endl;
-        return -1;
-    }
+    // cout << endl;
+    // cout << "Setting auth..." << endl;
+    // if (authSetUser(serial, "test_username"))
+    //     cout << "Succesfully set user. " << endl;
+    // else {
+    //     cout << "Failed to set user. " << endl;
+    //     return -1;
 
-
+    // }
+    cout << endl;
     cout << "Checking auth..." << endl;
     if (authCheckUser(serial, "test_username"))
         cout << "Succesfully checked user. " << endl;
@@ -277,6 +278,7 @@ int main() {
         return -1;
     }
 
+    cout << endl;
     cout << "Revoking auth..." << endl;
     if (authRevokeUser(serial, "test_username"))
         cout << "Succesfully removed user. " << endl;

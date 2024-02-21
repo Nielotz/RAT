@@ -86,7 +86,8 @@ enum class AuthStage {
     REGISTER_STAGE_2,
     REGISTER_STAGE_2_RELEASE,
     REGISTER_STAGE_3,
-    REGISTER_STAGE_3_RELEASE,
+
+    DELETE,
 };
 
 void handleNetwork(UsbConnection &pc, AuthStage &authStage, const int packetsPerIteration = 20) {
@@ -115,7 +116,7 @@ void handleNetwork(UsbConnection &pc, AuthStage &authStage, const int packetsPer
                 }
 
                 const auto &authPacket = AuthPacket::unpack(packet);
-                pc.sendPacket(DebugPacket("Payload: " + authPacket->payload));
+                pc.sendPacket(DebugPacket(std::string(std::string("Payload: ") + authPacket->payload)));
                 switch (authPacket->authType) {
                     default: ;
                         break;
@@ -125,13 +126,12 @@ void handleNetwork(UsbConnection &pc, AuthStage &authStage, const int packetsPer
                         break;
                     case AuthPacket::AuthType::CHECK_USER:
                         pc.sendPacket(DebugPacket("Packet is CHECK_USER."));
-                        pc.sendPacket(AuthPacket(AuthPacket::AuthType::CHECK_USER_RESPONSE,
-                                                 "VERIFIED"));
+                        //authStage = AuthStage::CHECK;
+                        pc.sendPacket(AuthPacket(AuthPacket::AuthType::CHECK_USER_RESPONSE, "VERIFIED"));
                         break;
                     case AuthPacket::AuthType::REVOKE_USER:
-                        pc.sendPacket(DebugPacket("Packet is CHECK_USER."));
-                        pc.sendPacket(AuthPacket(AuthPacket::AuthType::REVOKE_USER_RESPONSE,
-                                                 "OK"));
+                        pc.sendPacket(DebugPacket("Packet is REVOKE_USER."));
+                        authStage = AuthStage::DELETE;
                         break;
                 }
             }
@@ -145,8 +145,10 @@ void handleNetwork(UsbConnection &pc, AuthStage &authStage, const int packetsPer
 
 
 void handleAuth(const UsbConnection &pc, AuthStage &authStage) {
-    bool fail = false;
     switch (authStage) {
+        default: ;
+            break;
+
         case AuthStage::REGISTER: {
             fingerPrintScanner.enable();
             pc.sendPacket(DebugPacket("[AUTH 0/3] Rozpoczęto proces dodawania odcisku palca."));
@@ -161,8 +163,10 @@ void handleAuth(const UsbConnection &pc, AuthStage &authStage) {
                 break;
             fingerPrintScanner.setRingColor(SFM_RING_PURPLE);
             if (fingerPrintScanner.register_3c3r_1st() != SFM_ACK_SUCCESS) {
+                fingerPrintScanner.setRingColor(SFM_RING_RED, SFM_RING_RED);
                 pc.sendPacket(DebugPacket("[AUTH 1/3] Wystąpił błąd."));
-                fail = true;
+                pc.sendPacket(AuthPacket(AuthPacket::AuthType::SET_USER_RESPONSE, "FAIL"));
+                authStage = AuthStage::NONE;
                 break;
             }
             fingerPrintScanner.setRingColor(SFM_RING_GREEN);
@@ -183,8 +187,10 @@ void handleAuth(const UsbConnection &pc, AuthStage &authStage) {
                 break;
             fingerPrintScanner.setRingColor(SFM_RING_PURPLE);
             if (fingerPrintScanner.register_3c3r_2nd() != SFM_ACK_SUCCESS) {
+                fingerPrintScanner.setRingColor(SFM_RING_RED, SFM_RING_RED);
                 pc.sendPacket(DebugPacket("[AUTH 2/3] Wystąpił błąd."));
-                fail = true;
+                pc.sendPacket(AuthPacket(AuthPacket::AuthType::SET_USER_RESPONSE, "FAIL"));
+                authStage = AuthStage::NONE;
                 break;
             }
             fingerPrintScanner.setRingColor(SFM_RING_GREEN);
@@ -206,8 +212,10 @@ void handleAuth(const UsbConnection &pc, AuthStage &authStage) {
             fingerPrintScanner.setRingColor(SFM_RING_PURPLE);
             uint16_t uid = 0;
             if (fingerPrintScanner.register_3c3r_3rd(uid) != SFM_ACK_SUCCESS or uid == 0) {
+                fingerPrintScanner.setRingColor(SFM_RING_RED, SFM_RING_RED);
                 pc.sendPacket(DebugPacket("[AUTH 3/3] Wystąpił błąd."));
-                fail = true;
+                pc.sendPacket(AuthPacket(AuthPacket::AuthType::SET_USER_RESPONSE, "FAIL"));
+                authStage = AuthStage::NONE;
                 break;
             }
 
@@ -216,24 +224,19 @@ void handleAuth(const UsbConnection &pc, AuthStage &authStage) {
             using std::to_string;
             pc.sendPacket(DebugPacket(string("[AUTH 3/3] OK. uuid: ") + to_string(static_cast<uint32_t>(uid))));
             pc.sendPacket(AuthPacket(AuthPacket::AuthType::SET_USER_RESPONSE, "OK"));
-            authStage = AuthStage::REGISTER_STAGE_3_RELEASE;
-        }
 
-        case AuthStage::REGISTER_STAGE_3_RELEASE: {
-            if (fingerPrintScanner.isTouched())
-                break;
             authStage = AuthStage::NONE;
             fingerPrintScanner.setRingColor(SFM_RING_OFF);
+            fingerPrintScanner.disable();
         }
+        break;
 
-        default:
-            return;
-    }
-
-    if (fail) {
-        fingerPrintScanner.setRingColor(SFM_RING_RED, SFM_RING_RED);
-        pc.sendPacket(AuthPacket(AuthPacket::AuthType::SET_USER_RESPONSE, "FAIL"));
-        authStage = AuthStage::NONE;
+        case AuthStage::DELETE:
+            if (fingerPrintScanner.deleteAllUser() != SFM_ACK_SUCCESS)
+                pc.sendPacket(AuthPacket(AuthPacket::AuthType::REVOKE_USER_RESPONSE, "FAIL"));
+            else
+                pc.sendPacket(AuthPacket(AuthPacket::AuthType::REVOKE_USER_RESPONSE, "OK"));
+            authStage = AuthStage::NONE;
     }
 }
 
@@ -258,8 +261,9 @@ void loop() {
         case Stage::MAIN_LOOP: {
             handleMainButton(pc);
             // handleMouse(pc);
-            if (authStage != AuthStage::NONE)
-                handleAuth(pc, authStage);
+
+            handleAuth(pc, authStage);
+
             if (pc.usb) {
                 pc.setUsbCallback();
                 handleNetwork(pc, authStage);
