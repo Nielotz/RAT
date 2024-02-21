@@ -87,6 +87,8 @@ enum class AuthStage {
     REGISTER_STAGE_2_RELEASE,
     REGISTER_STAGE_3,
 
+    CHECK,
+    CHECK_STAGE_1,
     DELETE,
 };
 
@@ -126,8 +128,7 @@ void handleNetwork(UsbConnection &pc, AuthStage &authStage, const int packetsPer
                         break;
                     case AuthPacket::AuthType::CHECK_USER:
                         pc.sendPacket(DebugPacket("Packet is CHECK_USER."));
-                        //authStage = AuthStage::CHECK;
-                        pc.sendPacket(AuthPacket(AuthPacket::AuthType::CHECK_USER_RESPONSE, "VERIFIED"));
+                        authStage = AuthStage::CHECK;
                         break;
                     case AuthPacket::AuthType::REVOKE_USER:
                         pc.sendPacket(DebugPacket("Packet is REVOKE_USER."));
@@ -163,7 +164,7 @@ void handleAuth(const UsbConnection &pc, AuthStage &authStage) {
                 break;
             fingerPrintScanner.setRingColor(SFM_RING_PURPLE);
             if (fingerPrintScanner.register_3c3r_1st() != SFM_ACK_SUCCESS) {
-                fingerPrintScanner.setRingColor(SFM_RING_RED, SFM_RING_RED);
+                fingerPrintScanner.setRingColor(SFM_RING_RED);
                 pc.sendPacket(DebugPacket("[AUTH 1/3] Wystąpił błąd."));
                 pc.sendPacket(AuthPacket(AuthPacket::AuthType::SET_USER_RESPONSE, "FAIL"));
                 authStage = AuthStage::NONE;
@@ -187,7 +188,7 @@ void handleAuth(const UsbConnection &pc, AuthStage &authStage) {
                 break;
             fingerPrintScanner.setRingColor(SFM_RING_PURPLE);
             if (fingerPrintScanner.register_3c3r_2nd() != SFM_ACK_SUCCESS) {
-                fingerPrintScanner.setRingColor(SFM_RING_RED, SFM_RING_RED);
+                fingerPrintScanner.setRingColor(SFM_RING_RED);
                 pc.sendPacket(DebugPacket("[AUTH 2/3] Wystąpił błąd."));
                 pc.sendPacket(AuthPacket(AuthPacket::AuthType::SET_USER_RESPONSE, "FAIL"));
                 authStage = AuthStage::NONE;
@@ -212,7 +213,7 @@ void handleAuth(const UsbConnection &pc, AuthStage &authStage) {
             fingerPrintScanner.setRingColor(SFM_RING_PURPLE);
             uint16_t uid = 0;
             if (fingerPrintScanner.register_3c3r_3rd(uid) != SFM_ACK_SUCCESS or uid == 0) {
-                fingerPrintScanner.setRingColor(SFM_RING_RED, SFM_RING_RED);
+                fingerPrintScanner.setRingColor(SFM_RING_RED);
                 pc.sendPacket(DebugPacket("[AUTH 3/3] Wystąpił błąd."));
                 pc.sendPacket(AuthPacket(AuthPacket::AuthType::SET_USER_RESPONSE, "FAIL"));
                 authStage = AuthStage::NONE;
@@ -231,12 +232,35 @@ void handleAuth(const UsbConnection &pc, AuthStage &authStage) {
         }
         break;
 
+        case AuthStage::CHECK:
+            fingerPrintScanner.enable();
+            fingerPrintScanner.setRingColor(SFM_RING_YELLOW);
+            pc.sendPacket(DebugPacket("[AUTH] Przyłóż palec do czytnika."));
+            authStage = AuthStage::CHECK_STAGE_1;
+
+        case AuthStage::CHECK_STAGE_1:
+            if (!fingerPrintScanner.isTouched())
+                break;
+
+            if (uint16_t uid = 0; fingerPrintScanner.recognition_1vN(uid) != SFM_ACK_SUCCESS or uid == 0) {
+                fingerPrintScanner.setRingColor(SFM_RING_RED);
+                pc.sendPacket(AuthPacket(AuthPacket::AuthType::CHECK_USER_RESPONSE, "REJECTED"));
+            } else {
+                fingerPrintScanner.setRingColor(SFM_RING_GREEN);
+                pc.sendPacket(AuthPacket(AuthPacket::AuthType::CHECK_USER_RESPONSE, "VERIFIED"));
+            }
+            fingerPrintScanner.disable();
+            authStage = AuthStage::NONE;
+            break;
+
         case AuthStage::DELETE:
+            fingerPrintScanner.enable();
             if (fingerPrintScanner.deleteAllUser() != SFM_ACK_SUCCESS)
                 pc.sendPacket(AuthPacket(AuthPacket::AuthType::REVOKE_USER_RESPONSE, "FAIL"));
             else
                 pc.sendPacket(AuthPacket(AuthPacket::AuthType::REVOKE_USER_RESPONSE, "OK"));
             authStage = AuthStage::NONE;
+            fingerPrintScanner.disable();
     }
 }
 

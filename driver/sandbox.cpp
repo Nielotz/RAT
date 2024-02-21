@@ -260,15 +260,15 @@ int main() {
         return -1;
     }
 
-    // cout << endl;
-    // cout << "Setting auth..." << endl;
-    // if (authSetUser(serial, "test_username"))
-    //     cout << "Succesfully set user. " << endl;
-    // else {
-    //     cout << "Failed to set user. " << endl;
-    //     return -1;
-
-    // }
+    cout << endl;
+    cout << "Setting auth..." << endl;
+    if (authSetUser(serial, "test_username"))
+        cout << "Succesfully set user. " << endl;
+    else {
+        cout << "Failed to set user. " << endl;
+        return -1;
+    }
+    sleep(1);
     cout << endl;
     cout << "Checking auth..." << endl;
     if (authCheckUser(serial, "test_username"))
@@ -277,6 +277,9 @@ int main() {
         cout << "Failed checking user. " << endl;
         return -1;
     }
+
+    sleep(1);
+
 
     cout << endl;
     cout << "Revoking auth..." << endl;
