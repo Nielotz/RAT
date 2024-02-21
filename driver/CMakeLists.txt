@@ -9,6 +9,20 @@ add_library(my_pam_fp SHARED pam_fp.cpp
         serial/converters.h
 )
 
+add_executable(pam_fp_add_cred
+        pam_fp_add_cred.cpp
+        serial/serial.cpp
+        serial/packet.cpp serial/packet.h
+        serial/converters.h
+)
+
+add_executable(pam_fp_delete_cred
+        pam_fp_delete_cred.cpp
+        serial/serial.cpp
+        serial/packet.cpp serial/packet.h
+        serial/converters.h
+)
+
 add_executable(sandbox
         sandbox.cpp
         serial/serial.cpp
@@ -25,4 +39,6 @@ add_executable(pam_fp_test
 
 target_link_libraries(sandbox PUBLIC my_pam_fp pam pam_misc)
 target_link_libraries(pam_fp_test PUBLIC my_pam_fp pam pam_misc)
+target_link_libraries(pam_fp_add_cred PUBLIC my_pam_fp pam pam_misc)
+target_link_libraries(pam_fp_delete_cred PUBLIC my_pam_fp pam pam_misc)
 

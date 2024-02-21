@@ -19,12 +19,12 @@ int main() {
 
     pam_handle_t *pamh = nullptr;
     cout << "Initializing PAM transaction..." << endl;
+
     std::string username;
-    cout << "Username: ";
+    cout << "Username: " ;
     std::cin >> username;
 
     int retval = pam_start("sudo", username.c_str(), &conv, &pamh);
-
 
     // Are the credentials correct?
     if (retval == PAM_SUCCESS) {
@@ -38,11 +38,16 @@ int main() {
         retval = pam_acct_mgmt(pamh, 0);
     }
 
+    if (retval == PAM_SUCCESS) {
+        cout << "Deleting cred..." << endl;
+        pam_setcred(pamh, PAM_DELETE_CRED);
+    }
+
     // Did everything work?
     if (retval == PAM_SUCCESS) {
-        cout << "Authenticated" << endl;
+        cout << "OK" << endl;
     } else {
-        cout << "Not Authenticated" << endl;
+        cout << "Not OK" << endl;
     }
 
     // close PAM (end session)
