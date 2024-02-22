@@ -51,7 +51,7 @@ struct Stage {
     };
 };
 
-bool handleHanshakePacket(UsbConnection &pc, const std::unique_ptr<Packet> &packet) {
+bool handleHandshakePacket(UsbConnection &pc, const std::unique_ptr<Packet> &packet) {
     pc.sendPacket(DebugPacket("Packet is a handshake."));
     const auto &handshakePacket = HandshakePacket::unpack(packet);
     pc.sendPacket(DebugPacket(handshakePacket->str()));
@@ -97,7 +97,7 @@ void handleNetwork(UsbConnection &pc, AuthStage &authStage, const int packetsPer
         pc.sendPacket(DebugPacket("Received packet: " + packet->str()));
         switch (packet->packetType) {
             case PacketType::HANDSHAKE: {
-                if (handleHanshakePacket(pc, packet) and pc.syn != static_cast<uint32_t>(-1))
+                if (handleHandshakePacket(pc, packet) and pc.syn != static_cast<uint32_t>(-1))
                     pc.sendPacket(DebugPacket("Handshaked succesfully."));
                 break;
             }
