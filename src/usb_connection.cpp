@@ -12,11 +12,8 @@ UsbConnection::UsbConnection(USBCDC &usb)
     usb.setRxBufferSize(1024);
 }
 
-
-
-
 bool UsbConnection::sendPacket(const std::unique_ptr<Packet> &packet) const {
-    if (!usb.availableForWrite())
+    if (!usb or !usb.availableForWrite())
         return false;
 
     const auto packetSizeBuff = convert32bitTo4<uint32_t, char>(
@@ -62,11 +59,12 @@ std::unique_ptr<Packet> UsbConnection::receivePacket() const {
     return std::make_unique<Packet>(packetType, buffer);
 }
 
-void UsbConnection::setUsbCallback() {
+bool UsbConnection::setUsbCallback() {
     if (!callbackSet) {
         // usb.onEvent(usbEventCallback);
         callbackSet = true;
     }
+    return callbackSet;
 }
 
 // ReSharper disable once CppParameterMayBeConst
@@ -122,7 +120,7 @@ void UsbConnection::usbEventCallback(void *arg, esp_event_base_t eventBase, int3
             case ARDUINO_USB_CDC_RX_EVENT: {
                 failed = debugUsbConnection->sendPacket(
                     DebugPacket("CDC RX " + std::to_string(data->rx.len)).pack());
-                uint8_t buf[data->rx.len];
+                    // uint8_t buf[data->rx.len];
                 // const size_t len = usbSerial.read(buf, data->rx.len);
 
                 // usb.sendPacket(DebugPacket(std::s(buf, len)).pack());

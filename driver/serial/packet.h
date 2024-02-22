@@ -110,7 +110,7 @@ struct AuthPacket final : Packet {
     enum class AuthType : uint8_t {
         SET_USER, SET_USER_RESPONSE,
         CHECK_USER, CHECK_USER_RESPONSE,
-        REMOVE_USER, REVOKE_USER_RESPONSE,
+        REMOVE_USER, REMOVE_USER_RESPONSE,
         INVALID,
     };
 

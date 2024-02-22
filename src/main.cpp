@@ -1,5 +1,6 @@
 //https://github.com/espressif/arduino-esp32/blob/master/cores/esp32/USBCDC.cpp
 #include <Adafruit_TinyUSB.h>
+#include <mutex>
 #include <USBCDC.h>
 
 #include <sfm.hpp>
@@ -22,7 +23,8 @@ void IRAM_ATTR sfmPinInt1() {
 
 auto &usbSerial = Serial;
 
-int cycleTime = 1000;
+uint8_t constexpr desc_hid_report[] = {TUD_HID_REPORT_DESC_MOUSE()};
+Adafruit_USBD_HID usb_hid(desc_hid_report, sizeof(desc_hid_report), HID_ITF_PROTOCOL_MOUSE, 2, false);
 
 void setup() {
     control::main::led::init();
@@ -33,6 +35,7 @@ void setup() {
         fingerPrintScanner.setPinInterrupt(sfmPinInt1);
         fingerPrintScanner.setRingColor(SFM_RING_BLUE, SFM_RING_OFF);
     }
+    usb_hid.begin();
 }
 
 struct Stage {
@@ -47,14 +50,6 @@ struct Stage {
         EXIT,
     };
 };
-
-void handleMainButton(const UsbConnection &pc) {
-    if (control::main::button::isPressed()) {
-        // ReSharper disable once CppExpressionWithoutSideEffects
-        pc.sendPacket(DebugPacket("Button pressed."));
-        control::main::led::flipState();
-    }
-}
 
 bool handleHanshakePacket(UsbConnection &pc, const std::unique_ptr<Packet> &packet) {
     pc.sendPacket(DebugPacket("Packet is a handshake."));
@@ -130,8 +125,8 @@ void handleNetwork(UsbConnection &pc, AuthStage &authStage, const int packetsPer
                         pc.sendPacket(DebugPacket("Packet is CHECK_USER."));
                         authStage = AuthStage::CHECK;
                         break;
-                    case AuthPacket::AuthType::REVOKE_USER:
-                        pc.sendPacket(DebugPacket("Packet is REVOKE_USER."));
+                    case AuthPacket::AuthType::REMOVE_USER:
+                        pc.sendPacket(DebugPacket("Packet is REMOVE_USER."));
                         authStage = AuthStage::DELETE;
                         break;
                 }
@@ -143,7 +138,6 @@ void handleNetwork(UsbConnection &pc, AuthStage &authStage, const int packetsPer
         }
     }
 }
-
 
 void handleAuth(const UsbConnection &pc, AuthStage &authStage) {
     switch (authStage) {
@@ -232,13 +226,14 @@ void handleAuth(const UsbConnection &pc, AuthStage &authStage) {
         }
         break;
 
-        case AuthStage::CHECK:
+        case AuthStage::CHECK: {
             fingerPrintScanner.enable();
             fingerPrintScanner.setRingColor(SFM_RING_YELLOW);
             pc.sendPacket(DebugPacket("[AUTH] Przyłóż palec do czytnika."));
             authStage = AuthStage::CHECK_STAGE_1;
+        }
 
-        case AuthStage::CHECK_STAGE_1:
+        case AuthStage::CHECK_STAGE_1: {
             if (!fingerPrintScanner.isTouched())
                 break;
 
@@ -251,16 +246,49 @@ void handleAuth(const UsbConnection &pc, AuthStage &authStage) {
             }
             fingerPrintScanner.disable();
             authStage = AuthStage::NONE;
-            break;
+        }
+        break;
 
-        case AuthStage::DELETE:
+        case AuthStage::DELETE: {
             fingerPrintScanner.enable();
             if (fingerPrintScanner.deleteAllUser() != SFM_ACK_SUCCESS)
-                pc.sendPacket(AuthPacket(AuthPacket::AuthType::REVOKE_USER_RESPONSE, "FAIL"));
+                pc.sendPacket(AuthPacket(AuthPacket::AuthType::REMOVE_USER_RESPONSE, "FAIL"));
             else
-                pc.sendPacket(AuthPacket(AuthPacket::AuthType::REVOKE_USER_RESPONSE, "OK"));
+                pc.sendPacket(AuthPacket(AuthPacket::AuthType::REMOVE_USER_RESPONSE, "OK"));
             authStage = AuthStage::NONE;
             fingerPrintScanner.disable();
+        }
+    }
+}
+
+void handleMouse() {
+    using namespace control::mouse;
+    const struct {
+        const int &x, &y;
+    } mouseMovement = {
+                .x = -move_left_button::isPressed() + move_right_button::isPressed(),
+                .y = -move_down_button::isPressed() + move_up_button::isPressed(),
+            };
+
+    if (mouseMovement.x || mouseMovement.y) {
+        // Update mouse.
+        if (TinyUSBDevice.suspended()) {
+            // Wake up host if we are in suspend mode and REMOTE_WAKEUP feature is enabled by host
+            TinyUSBDevice.remoteWakeup();
+        }
+        if (usb_hid.ready()) {
+            constexpr auto delta = 4;
+            constexpr uint8_t reportId = 0; // no ID
+            usb_hid.mouseMove(reportId,
+                              static_cast<int8_t>(mouseMovement.x * delta),
+                              static_cast<int8_t>(mouseMovement.y * delta));
+        }
+    }
+
+    if (control::main::button::isPressed()) {
+        usb_hid.mouseMove(0,
+                          5,
+                          5);
     }
 }
 
@@ -268,29 +296,26 @@ void loop() {
     static int stage = Stage::LOOP_INIT;
     static UsbConnection pc(usbSerial);
     static auto authStage = AuthStage::NONE;
+    static int cycleTime = 10;
 
     switch (stage) {
         case Stage::LOOP_INIT: {
             UsbConnection::debugUsbConnection = &pc;
-            if (!pc.sendPacket(DebugPacket("Starting main loop."))) {
-                control::main::led::flipState();
-                pc.usb.begin();
-                cycleTime = 100;
-            } else {
-                cycleTime = 10;
-                stage = Stage::MAIN_LOOP;
-            }
+            pc.sendPacket(DebugPacket("Starting main loop."));
+            stage = Stage::MAIN_LOOP;
         }
 
         case Stage::MAIN_LOOP: {
-            handleMainButton(pc);
-            // handleMouse(pc);
-
-            handleAuth(pc, authStage);
+            if (usb_hid.isValid() and TinyUSBDevice.mounted())
+                handleMouse();
 
             if (pc.usb) {
-                pc.setUsbCallback();
+                static std::once_flag flag1;
+                std::call_once(flag1, []() { pc.setUsbCallback(); });
+
                 handleNetwork(pc, authStage);
+                handleAuth(pc, authStage);
+
                 control::main::led::on();
             } else
                 control::main::led::off();

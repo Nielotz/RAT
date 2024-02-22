@@ -18,7 +18,7 @@ public:
     /* Receive packet or nullptr when no packet available. */
     std::unique_ptr<Packet> receivePacket() const;
 
-    void setUsbCallback();
+    bool setUsbCallback();
 
     static void usbEventCallback(void *arg, esp_event_base_t eventBase, int32_t eventId, void *eventData);
 

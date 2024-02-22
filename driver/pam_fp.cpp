@@ -63,7 +63,7 @@ PAM_EXTERN int pam_sm_setcred(pam_handle_t *pamh, int flags, int argc, const cha
                     default:
                         return PAM_CRED_UNAVAIL;
                     case AuthPacket::AuthType::SET_USER_RESPONSE:
-                    case AuthPacket::AuthType::REVOKE_USER_RESPONSE:
+                    case AuthPacket::AuthType::REMOVE_USER_RESPONSE:
                         if (authPacket->payload == "OK")
                             return PAM_SUCCESS;
                         return PAM_CRED_ERR;

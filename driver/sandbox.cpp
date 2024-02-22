@@ -5,7 +5,7 @@
 
 #include "serial/serial.h"
 
-constexpr auto path = "/dev/serial/by-id/usb-WEMOS.CC_LOLIN-S2-MINI_0-if00";
+constexpr auto path = "/dev/serial/by-id/usb-WEMOS.CC_LOLIN-S2-MINI_0-if01";
 
 constexpr pam_conv conv = {
     misc_conv, // Defined in pam_misc.h
@@ -165,7 +165,7 @@ bool authCheckUser(const Serial &serial, const string &username) {
                     case AuthPacket::AuthType::REMOVE_USER:
                         cout << "Packet is AuthType::SET_USER: " << authPacket->payload << endl;
                         break;
-                    case AuthPacket::AuthType::REVOKE_USER_RESPONSE:
+                    case AuthPacket::AuthType::REMOVE_USER_RESPONSE:
                         cout << "Packet is AuthType::SET_USER_RESPONSE: " << authPacket->payload << endl;
                         break;
                 }
@@ -182,7 +182,7 @@ bool authCheckUser(const Serial &serial, const string &username) {
     }
 }
 
-bool authRevokeUser(const Serial &serial, const string &username) {
+bool authRemoveUser(const Serial &serial, const string &username) {
     if (!serial.writePacket(AuthPacket(AuthPacket::AuthType::REMOVE_USER, username)))
         return false;
 
@@ -224,10 +224,10 @@ bool authRevokeUser(const Serial &serial, const string &username) {
                         cout << "Packet is AuthType::SET_USER_RESPONSE: " << authPacket->payload << endl;
                         break;
                     case AuthPacket::AuthType::REMOVE_USER:
-                        cout << "Packet is AuthType::REVOKE_USER: " << authPacket->payload << endl;
+                        cout << "Packet is AuthType::REMOVE_USER: " << authPacket->payload << endl;
                         break;
-                    case AuthPacket::AuthType::REVOKE_USER_RESPONSE:
-                        cout << "Packet is AuthType::REVOKE_USER_RESPONSE: " << authPacket->payload << endl;
+                    case AuthPacket::AuthType::REMOVE_USER_RESPONSE:
+                        cout << "Packet is AuthType::REMOVE_USER_RESPONSE: " << authPacket->payload << endl;
                         return authPacket->payload == "OK";
                 }
                 break;
@@ -283,7 +283,7 @@ int main() {
 
     cout << endl;
     cout << "Revoking auth..." << endl;
-    if (authRevokeUser(serial, "test_username"))
+    if (authRemoveUser(serial, "test_username"))
         cout << "Succesfully removed user. " << endl;
     else {
         cout << "Failed removing user. " << endl;
