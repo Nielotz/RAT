@@ -5,7 +5,7 @@ Mouse side of the project ended as 4 buttons moving the cursor so technically it
 
 ## Overview
 ### Sequence diagram [PL] 
-![alt text](scheme_pl.jpg)
+![alt text](res/scheme_pl.jpg)
 RAT is a two-part authentication solution:
 1. **ESP32 Firmware** - Runs on a WEMOS LOLIN-S2-MINI board with SFM-V1.7 fingerprint scanner
 2. **PAM Module** - Linux PAM integration for system-level authentication using the fingerprint device
