@@ -286,9 +286,7 @@ void handleMouse() {
     }
 
     if (control::main::button::isPressed()) {
-        usb_hid.mouseMove(0,
-                          5,
-                          5);
+        usb_hid.mouseMove(0, 5, 5);
     }
 }
 

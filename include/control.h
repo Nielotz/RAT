@@ -36,7 +36,6 @@ namespace control {
                 digitalWrite(pin, !digitalRead(pin));
             }
         }
-
     }
 
     namespace mouse {
